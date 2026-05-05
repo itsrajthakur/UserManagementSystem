@@ -1,0 +1,30 @@
+.ui-page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+
+.ui-page-header__title {
+  font-size: clamp(1.4rem, 2.5vw, 2rem);
+  font-weight: 700;
+}
+
+.ui-page-header__subtitle {
+  margin-top: var(--space-2);
+  color: var(--app-muted);
+  max-width: 70ch;
+}
+
+.ui-surface {
+  border: 1px solid var(--app-border);
+  background: var(--app-surface);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.ui-surface--padded {
+  padding: var(--space-5);
+}

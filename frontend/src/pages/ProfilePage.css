@@ -1,0 +1,139 @@
+.profile-page {
+  max-width: 520px;
+}
+
+.profile-page__title {
+  margin: 0 0 1rem;
+  font-size: 1.35rem;
+}
+
+.profile-page__banner {
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  margin-bottom: 1rem;
+}
+
+.profile-page__banner--error {
+  background: rgba(239, 68, 68, 0.12);
+  color: #fecaca;
+}
+
+.profile-page__muted {
+  margin: 0;
+  opacity: 0.75;
+  font-size: 0.9rem;
+}
+
+.profile-page__photo {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.25rem;
+  margin-bottom: 1.75rem;
+  flex-wrap: wrap;
+}
+
+.profile-page__avatar-wrap {
+  flex-shrink: 0;
+}
+
+.profile-page__avatar {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--app-border, #272a34);
+}
+
+.profile-page__avatar--placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(129, 140, 248, 0.2);
+  font-size: 2rem;
+  font-weight: 600;
+}
+
+.profile-page__file {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.profile-page__section {
+  border-top: 1px solid var(--app-border, #272a34);
+  padding-top: 1.25rem;
+}
+
+.profile-page__section-title {
+  margin: 0 0 1rem;
+  font-size: 1.05rem;
+}
+
+.profile-page__field {
+  margin-bottom: 1rem;
+}
+
+.profile-page__field label {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.profile-page__field input {
+  width: 100%;
+  max-width: 340px;
+  padding: 0.55rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid var(--app-border, #272a34);
+  background: rgba(255, 255, 255, 0.04);
+  color: inherit;
+  font: inherit;
+}
+
+.profile-page__field input:focus {
+  outline: none;
+  border-color: rgba(129, 140, 248, 0.55);
+}
+
+.profile-page__err {
+  margin: 0.3rem 0 0;
+  font-size: 0.78rem;
+  color: #fca5a5;
+}
+
+.profile-page__btn {
+  margin-top: 0.35rem;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  background: #6366f1;
+  color: #fff;
+}
+
+.profile-page__btn:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+
+.profile-page__btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.profile-page__btn--secondary {
+  background: transparent;
+  border: 1px solid var(--app-border, #272a34);
+  color: inherit;
+}
+
+.profile-page__hint {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+  opacity: 0.82;
+}

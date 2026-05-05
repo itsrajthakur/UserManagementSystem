@@ -1,0 +1,9 @@
+/* Minimal app-level tweaks — layout chrome lives in components/layout/AppLayout.css */
+#root {
+  min-height: 100vh;
+}
+
+code {
+  font-family: ui-monospace, monospace;
+  font-size: 0.88em;
+}
