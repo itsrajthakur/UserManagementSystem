@@ -13,6 +13,11 @@ function slug(p) {
   return `${p.resource}:${p.action}`;
 }
 
+function titleText(value) {
+  if (!value) return '';
+  return String(value).charAt(0).toUpperCase() + String(value).slice(1);
+}
+
 export default function AdminRolesPage() {
   const [roles, setRoles] = useState([]);
   const [perms, setPerms] = useState([]);
@@ -39,6 +44,19 @@ export default function AdminRolesPage() {
     () => [...perms].sort((a, b) => slug(a).localeCompare(slug(b))),
     [perms]
   );
+  const actionColumns = useMemo(() => Object.values(ACTIONS), []);
+  const permissionMatrix = useMemo(() => {
+    const matrix = new Map();
+    sortedPermissions.forEach((permission) => {
+      const resourceKey = String(permission.resource || '').toLowerCase();
+      if (!resourceKey) return;
+      if (!matrix.has(resourceKey)) matrix.set(resourceKey, new Map());
+      matrix.get(resourceKey).set(String(permission.action), permission);
+    });
+    return Array.from(matrix.entries()).map(([resource, actionMap]) => ({ resource, actionMap }));
+  }, [sortedPermissions]);
+  const roleCount = roles.length;
+  const permissionCount = sortedPermissions.length;
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -167,64 +185,26 @@ export default function AdminRolesPage() {
       {loading ? (
         <p className="admin-roles-page__muted">Loading…</p>
       ) : (
-        <div className="admin-roles-page__layout">
-          <SurfaceCard className="admin-roles-page__card">
-            <h2 className="admin-roles-page__sub">Create role</h2>
-            <form onSubmit={handleCreateRole} className="admin-roles-page__form">
-              <label>
-                Name
-                <input value={newRoleName} onChange={(e) => setNewRoleName(e.target.value)} required />
-              </label>
-              <label>
-                Description
-                <input
-                  value={newRoleDescription}
-                  onChange={(e) => setNewRoleDescription(e.target.value)}
-                />
-              </label>
-              <button className="admin-roles-page__btn" type="submit">
-                Create role
-              </button>
-            </form>
+        <>
+          <div className="admin-roles-page__stats">
+            <SurfaceCard className="admin-roles-page__stat-card">
+              <p className="admin-roles-page__stat-label">Total roles</p>
+              <strong className="admin-roles-page__stat-value">{roleCount}</strong>
+            </SurfaceCard>
+            <SurfaceCard className="admin-roles-page__stat-card">
+              <p className="admin-roles-page__stat-label">Total permissions</p>
+              <strong className="admin-roles-page__stat-value">{permissionCount}</strong>
+            </SurfaceCard>
+          </div>
 
-            <h2 className="admin-roles-page__sub">Create permission</h2>
-            <form onSubmit={handleCreatePermission} className="admin-roles-page__form">
-              <label>
-                Resource
-                <input
-                  value={newPermissionResource}
-                  onChange={(e) => setNewPermissionResource(e.target.value)}
-                  required
-                />
-              </label>
-              <label>
-                Action
-                <select
-                  value={newPermissionAction}
-                  onChange={(e) => setNewPermissionAction(e.target.value)}
-                >
-                  {Object.values(ACTIONS).map((a) => (
-                    <option key={a} value={a}>
-                      {a}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Description
-                <input
-                  value={newPermissionDescription}
-                  onChange={(e) => setNewPermissionDescription(e.target.value)}
-                />
-              </label>
-              <button className="admin-roles-page__btn" type="submit">
-                Create permission
-              </button>
-            </form>
-          </SurfaceCard>
-
-          <SurfaceCard className="admin-roles-page__card">
-            <h2 className="admin-roles-page__sub">Manage role</h2>
+          <div className="admin-roles-page__layout">
+            <SurfaceCard className="admin-roles-page__card admin-roles-page__card--wide">
+            <div className="admin-roles-page__section-head">
+              <h2 className="admin-roles-page__sub">Manage role</h2>
+              <p className="admin-roles-page__muted">
+                Select a role, update details, and assign permissions.
+              </p>
+            </div>
             {roles.length === 0 ? (
               <p className="admin-roles-page__muted">No roles found.</p>
             ) : (
@@ -246,38 +226,71 @@ export default function AdminRolesPage() {
 
                 {selectedRole ? (
                   <form onSubmit={handleSaveRole} className="admin-roles-page__form">
-                    <label>
-                      Name
-                      <input
-                        value={roleEditName}
-                        onChange={(e) => setRoleEditName(e.target.value)}
-                        required
-                      />
-                    </label>
-                    <label>
-                      Description
-                      <input
-                        value={roleEditDescription}
-                        onChange={(e) => setRoleEditDescription(e.target.value)}
-                      />
-                    </label>
+                    <div className="admin-roles-page__split">
+                      <label>
+                        Name
+                        <input
+                          value={roleEditName}
+                          onChange={(e) => setRoleEditName(e.target.value)}
+                          required
+                        />
+                      </label>
+                      <label>
+                        Description
+                        <input
+                          value={roleEditDescription}
+                          onChange={(e) => setRoleEditDescription(e.target.value)}
+                        />
+                      </label>
+                    </div>
                     <div className="admin-roles-page__perm-list">
-                      {sortedPermissions.map((p) => {
-                        const key = String(p._id);
-                        return (
-                          <label key={key} className="admin-roles-page__perm-item">
-                            <input
-                              type="checkbox"
-                              checked={rolePermissionIds.includes(key)}
-                              onChange={() => togglePermissionId(key)}
-                            />
-                            <span>{slug(p)}</span>
-                            {p.description ? (
-                              <small className="admin-roles-page__muted"> — {p.description}</small>
-                            ) : null}
-                          </label>
-                        );
-                      })}
+                      <p className="admin-roles-page__perm-title">Permissions matrix</p>
+                      <div className="admin-roles-page__matrix-wrap">
+                        <table className="admin-roles-page__matrix">
+                          <thead>
+                            <tr>
+                              <th scope="col">Resource</th>
+                              {actionColumns.map((action) => (
+                                <th scope="col" key={action}>
+                                  {titleText(action)}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {permissionMatrix.map(({ resource, actionMap }) => (
+                              <tr key={resource}>
+                                <th scope="row">{titleText(resource)}</th>
+                                {actionColumns.map((action) => {
+                                  const permission = actionMap.get(action);
+                                  if (!permission) {
+                                    return (
+                                      <td key={`${resource}:${action}`}>
+                                        <span
+                                          className="admin-roles-page__matrix-empty"
+                                          aria-label="Permission not defined"
+                                        />
+                                      </td>
+                                    );
+                                  }
+                                  const key = String(permission._id);
+                                  return (
+                                    <td key={key}>
+                                      <input
+                                        className="admin-roles-page__matrix-check"
+                                        type="checkbox"
+                                        checked={rolePermissionIds.includes(key)}
+                                        onChange={() => togglePermissionId(key)}
+                                        aria-label={`${resource} ${action}`}
+                                      />
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
 
                     <div className="admin-roles-page__row">
@@ -296,10 +309,74 @@ export default function AdminRolesPage() {
                 ) : null}
               </>
             )}
-          </SurfaceCard>
+            </SurfaceCard>
 
-          <SurfaceCard className="admin-roles-page__card">
-            <h2 className="admin-roles-page__sub">Permission catalog</h2>
+            <SurfaceCard className="admin-roles-page__card">
+            <div className="admin-roles-page__section-head">
+              <h2 className="admin-roles-page__sub">Quick actions</h2>
+              <p className="admin-roles-page__muted">Create role and permission from one place.</p>
+            </div>
+            <h3 className="admin-roles-page__mini-sub">Create role</h3>
+            <form onSubmit={handleCreateRole} className="admin-roles-page__form">
+              <label>
+                Name
+                <input value={newRoleName} onChange={(e) => setNewRoleName(e.target.value)} required />
+              </label>
+              <label>
+                Description
+                <input
+                  value={newRoleDescription}
+                  onChange={(e) => setNewRoleDescription(e.target.value)}
+                />
+              </label>
+              <button className="admin-roles-page__btn" type="submit">
+                Create role
+              </button>
+            </form>
+
+            <h3 className="admin-roles-page__mini-sub">Create permission</h3>
+            <form onSubmit={handleCreatePermission} className="admin-roles-page__form">
+              <div className="admin-roles-page__split">
+                <label>
+                  Resource
+                  <input
+                    value={newPermissionResource}
+                    onChange={(e) => setNewPermissionResource(e.target.value)}
+                    required
+                  />
+                </label>
+                <label>
+                  Action
+                  <select
+                    value={newPermissionAction}
+                    onChange={(e) => setNewPermissionAction(e.target.value)}
+                  >
+                    {Object.values(ACTIONS).map((a) => (
+                      <option key={a} value={a}>
+                        {a}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <label>
+                Description
+                <input
+                  value={newPermissionDescription}
+                  onChange={(e) => setNewPermissionDescription(e.target.value)}
+                />
+              </label>
+              <button className="admin-roles-page__btn" type="submit">
+                Create permission
+              </button>
+            </form>
+            </SurfaceCard>
+
+            <SurfaceCard className="admin-roles-page__card admin-roles-page__card--full">
+            <div className="admin-roles-page__section-head">
+              <h2 className="admin-roles-page__sub">Permission catalog</h2>
+              <p className="admin-roles-page__muted">Review all permissions and remove unused ones.</p>
+            </div>
             {sortedPermissions.length === 0 ? (
               <p className="admin-roles-page__muted">No permissions found.</p>
             ) : (
@@ -319,8 +396,9 @@ export default function AdminRolesPage() {
                 ))}
               </ul>
             )}
-          </SurfaceCard>
-        </div>
+            </SurfaceCard>
+          </div>
+        </>
       )}
     </div>
   );
