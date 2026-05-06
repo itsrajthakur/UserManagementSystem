@@ -17,15 +17,46 @@ const RESOURCES = Object.freeze({
   PERMISSIONS: 'permissions',
 });
 
-/** Built-in roles with special safeguards (cannot be deleted). */
-const PROTECTED_ROLE_NAMES = Object.freeze(['Admin', 'Member']);
+/**
+ * Numeric privilege rank on Role documents (higher = more powerful).
+ * Used for hierarchy checks in addition to permission-based `authorize()`.
+ */
+const ROLE_LEVEL = Object.freeze({
+  EMPLOYEE: 1,
+  MANAGER: 4,
+  ADMIN: 7,
+  SUPERADMIN: 10,
+});
 
-/** Users with this role name may access admin management APIs. */
+/** Canonical role names (PascalCase). */
+const SUPERADMIN_ROLE_NAME = 'SuperAdmin';
 const ADMIN_ROLE_NAME = 'Admin';
+const MANAGER_ROLE_NAME = 'Manager';
+const EMPLOYEE_ROLE_NAME = 'Employee';
+
+/** Legacy signup role — treated as Employee level. */
+const LEGACY_MEMBER_ROLE_NAME = 'Member';
+
+const ROLE_LEVEL_BY_CANONICAL_NAME = Object.freeze({
+  [SUPERADMIN_ROLE_NAME]: ROLE_LEVEL.SUPERADMIN,
+  [ADMIN_ROLE_NAME]: ROLE_LEVEL.ADMIN,
+  [MANAGER_ROLE_NAME]: ROLE_LEVEL.MANAGER,
+  [EMPLOYEE_ROLE_NAME]: ROLE_LEVEL.EMPLOYEE,
+  [LEGACY_MEMBER_ROLE_NAME]: ROLE_LEVEL.EMPLOYEE,
+});
+
+/** Only the SuperAdmin definition is non-deletable via API. */
+const PROTECTED_ROLE_NAMES = Object.freeze([SUPERADMIN_ROLE_NAME]);
 
 module.exports = {
   ACTIONS,
   RESOURCES,
-  PROTECTED_ROLE_NAMES,
+  ROLE_LEVEL,
+  ROLE_LEVEL_BY_CANONICAL_NAME,
+  SUPERADMIN_ROLE_NAME,
   ADMIN_ROLE_NAME,
+  MANAGER_ROLE_NAME,
+  EMPLOYEE_ROLE_NAME,
+  LEGACY_MEMBER_ROLE_NAME,
+  PROTECTED_ROLE_NAMES,
 };

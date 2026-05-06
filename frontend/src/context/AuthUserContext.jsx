@@ -27,11 +27,19 @@ export function AuthUserProvider({ children }) {
       setUser(profile);
     } catch (err) {
       const status = err.response?.status;
+      const apiMessage = err.response?.data?.message || '';
+      if (status === 403 && apiMessage) {
+        try {
+          sessionStorage.setItem('authBlockedMessage', apiMessage);
+        } catch {
+          // Ignore storage failures (private mode / blocked storage).
+        }
+      }
       if (status === 401 || status === 403) {
         clearStoredToken();
       }
       setUser(null);
-      setError(err.response?.data?.message || err.message || 'Failed to load profile');
+      setError(apiMessage || err.message || 'Failed to load profile');
     } finally {
       setLoading(false);
     }

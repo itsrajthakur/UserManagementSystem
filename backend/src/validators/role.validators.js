@@ -11,6 +11,11 @@ const createRoleValidation = [
     .isLength({ max: 80 })
     .withMessage('Name must be at most 80 characters'),
   body('description').optional().trim().isLength({ max: 500 }),
+  body('isActive').optional().isBoolean().withMessage('isActive must be boolean'),
+  body('roleLevel')
+    .optional()
+    .isInt({ min: 1, max: 10 })
+    .withMessage('roleLevel must be an integer'),
   body('permissionIds')
     .optional()
     .isArray({ min: 0 })
@@ -28,6 +33,11 @@ const updateRoleValidation = [
     .isLength({ max: 80 })
     .withMessage('Name must be at most 80 characters'),
   body('description').optional().trim().isLength({ max: 500 }),
+  body('isActive').optional().isBoolean().withMessage('isActive must be boolean'),
+  body('roleLevel')
+    .optional()
+    .isInt({ min: 1, max: 10 })
+    .withMessage('roleLevel must be an integer'),
   body('permissionIds')
     .optional()
     .isArray({ min: 0 })

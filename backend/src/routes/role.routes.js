@@ -18,6 +18,7 @@ const {
   updateRole,
   assignPermissionsToRole,
   deleteRole,
+  restoreRole,
 } = require('../controllers/role.controller');
 
 const router = Router();
@@ -64,6 +65,14 @@ router.delete(
   roleIdOnlyValidation,
   validateRequest,
   deleteRole
+);
+router.post(
+  '/:roleId/restore',
+  ...activeAuth,
+  authorize(RESOURCES.ROLES, ACTIONS.UPDATE),
+  roleIdOnlyValidation,
+  validateRequest,
+  restoreRole
 );
 
 module.exports = router;

@@ -1,5 +1,6 @@
 const bcrypt = require('bcrypt');
 const { User, Role } = require('../models');
+const { EMPLOYEE_ROLE_NAME } = require('../constants/rbac');
 const { signToken } = require('../utils/jwt');
 const createHttpError = require('../utils/httpError');
 const { hashToken, generateRawToken } = require('../utils/tokenHash');
@@ -10,15 +11,19 @@ const {
   isProd,
 } = require('../config/env');
 
-const MEMBER_ROLE_NAME = 'Member';
 const BCRYPT_ROUNDS = 12;
 const RESET_EXPIRE_MS = 60 * 60 * 1000;
 const VERIFY_EXPIRE_MS = 48 * 3600 * 1000;
 
-async function ensureMemberRole() {
-  let role = await Role.findOne({ name: MEMBER_ROLE_NAME });
+async function ensureEmployeeRole() {
+  let role = await Role.findOne({ name: EMPLOYEE_ROLE_NAME, isDeleted: false });
   if (!role) {
-    role = await Role.create({ name: MEMBER_ROLE_NAME, permissions: [] });
+    role = await Role.create({
+      name: EMPLOYEE_ROLE_NAME,
+      description: 'Default self-service user',
+      isActive: true,
+      permissions: [],
+    });
   }
   return role;
 }
@@ -27,7 +32,7 @@ async function signup(req, res, next) {
   try {
     const { name, email, password } = req.body;
 
-    const memberRole = await ensureMemberRole();
+    const memberRole = await ensureEmployeeRole();
     const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
     const payload = {
@@ -48,7 +53,7 @@ async function signup(req, res, next) {
     const user = await User.create(payload);
     const populated = await User.findById(user._id)
       .select('-password')
-      .populate('role', 'name permissions');
+      .populate('role', 'name roleLevel isActive permissions');
 
     if (requireEmailVerification) {
       if (!isProd) {
@@ -86,7 +91,18 @@ async function login(req, res, next) {
   try {
     const { email, password } = req.body;
 
-    const user = await User.findOne({ email }).select('+password').populate('role', 'name permissions');
+    const deletedUser = await User.findOne({ email, isDeleted: true }).select('_id');
+    if (deletedUser) {
+      return res.status(403).json({ success: false, message: 'Account is deleted' });
+    }
+
+    const user = await User.findOne({ email, isDeleted: false })
+      .select('+password')
+      .populate({
+        path: 'role',
+        select: 'name roleLevel isActive isDeleted permissions',
+        match: { isDeleted: false },
+      });
 
     const valid = user && (await bcrypt.compare(password, user.password));
     if (!valid) {
@@ -95,6 +111,17 @@ async function login(req, res, next) {
 
     if (!user.isActive) {
       return res.status(403).json({ success: false, message: 'Account is deactivated' });
+    }
+    if (!user.role) {
+      return res.status(403).json({ success: false, message: 'Assigned role is deleted. Please contact admin.' });
+    }
+    if (user.role.isDeleted) {
+      return res.status(403).json({ success: false, message: 'Assigned role is deleted. Please contact admin.' });
+    }
+    if (!user.role || user.role.isActive === false) {
+      return res
+        .status(403)
+        .json({ success: false, message: 'Your role is inactive. Please contact admin.' });
     }
 
     const userOut = user.toObject();
@@ -118,18 +145,20 @@ async function login(req, res, next) {
 
 async function getMe(req, res, next) {
   try {
-    const user = await User.findById(req.auth.sub)
+    const user = await User.findOne({ _id: req.auth.sub, isDeleted: false })
       .select('-password')
       .populate({
         path: 'role',
-        select: 'name',
+        select: 'name roleLevel isActive isDeleted',
+        match: { isDeleted: false },
         populate: {
           path: 'permissions',
           select: 'resource action description',
+          match: { isDeleted: false },
         },
       })
-      .populate('customPermissions', 'resource action description')
-      .populate('deniedPermissions', 'resource action description');
+      .populate({ path: 'customPermissions', select: 'resource action description', match: { isDeleted: false } })
+      .populate({ path: 'deniedPermissions', select: 'resource action description', match: { isDeleted: false } });
 
     if (!user) {
       return next(createHttpError(404, 'User not found'));
@@ -137,6 +166,12 @@ async function getMe(req, res, next) {
 
     if (!user.isActive) {
       return next(createHttpError(403, 'Account is deactivated'));
+    }
+    if (!user.role || user.role.isDeleted) {
+      return next(createHttpError(403, 'Assigned role is deleted. Please contact admin.'));
+    }
+    if (!user.role || user.role.isActive === false) {
+      return next(createHttpError(403, 'Your role is inactive. Please contact admin.'));
     }
 
     return res.json({
@@ -152,7 +187,7 @@ async function getMe(req, res, next) {
 async function forgotPassword(req, res, next) {
   try {
     const rawEmail = (req.body.email || '').trim().toLowerCase();
-    const user = await User.findOne({ email: rawEmail }).select('+password');
+    const user = await User.findOne({ email: rawEmail, isDeleted: false }).select('+password');
 
     const generic = {
       success: true,
@@ -188,6 +223,7 @@ async function resetPassword(req, res, next) {
     const user = await User.findOne({
       passwordResetTokenHash: tokenHash,
       passwordResetExpires: { $gt: new Date() },
+      isDeleted: false,
     }).select('+password +passwordResetTokenHash +passwordResetExpires');
 
     if (!user) {
@@ -216,6 +252,7 @@ async function verifyEmail(req, res, next) {
     const user = await User.findOne({
       emailVerificationTokenHash: th,
       emailVerificationExpires: { $gt: new Date() },
+      isDeleted: false,
     }).select('+emailVerificationTokenHash +emailVerificationExpires');
 
     if (!user) {

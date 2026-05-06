@@ -1,10 +1,10 @@
 import { useLocation } from 'react-router-dom';
 import { useAuthUser } from '../../context/AuthUserContext';
-import { isAdminUser } from '../../utils/rbacClient';
+import { isManagerOrAbove } from '../../utils/rbacClient';
 import AdminDashboard from './AdminDashboard';
 import MemberDashboard from './MemberDashboard';
 
-/** Picks administrator vs member experience based on backend role name. */
+/** Picks team lead / admin tooling vs employee experience based on hierarchy (Manager+ vs Employee). */
 export default function DashboardView() {
   const location = useLocation();
   const { user, loading } = useAuthUser();
@@ -42,7 +42,7 @@ export default function DashboardView() {
           open it in this browser to finish.
         </div>
       ) : null}
-      {isAdminUser(user) ? <AdminDashboard /> : <MemberDashboard />}
+      {isManagerOrAbove(user) ? <AdminDashboard /> : <MemberDashboard />}
     </>
   );
 }

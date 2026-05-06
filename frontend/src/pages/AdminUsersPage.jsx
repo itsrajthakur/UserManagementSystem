@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuthUser } from '../context/AuthUserContext';
+import { ROLE_NAME } from '../constants/rbac';
+import { canAssignRoleInUi, canManageAnotherUser } from '../utils/rbacClient';
 import { userApi } from '../services/api/user.api.js';
 import { rolesApi } from '../services/api/roles.api.js';
 import PageHeader from '../components/ui/PageHeader';
@@ -15,7 +17,7 @@ function permLabel(p) {
   return `${p.resource}:${p.action}`;
 }
 
-function PermModes({ uid, pid, mode, onChange }) {
+function PermModes({ uid, pid, mode, onChange, disabled }) {
   const gid = `${uid}:${pid}`;
   return (
     <div className="admin-users-page__perm-modes">
@@ -24,6 +26,7 @@ function PermModes({ uid, pid, mode, onChange }) {
           type="radio"
           name={gid}
           checked={mode === 'inherit'}
+          disabled={disabled}
           onChange={() => onChange(pid, 'inherit')}
         />{' '}
         Role
@@ -33,6 +36,7 @@ function PermModes({ uid, pid, mode, onChange }) {
           type="radio"
           name={gid}
           checked={mode === 'grant'}
+          disabled={disabled}
           onChange={() => onChange(pid, 'grant')}
         />{' '}
         Grant
@@ -42,6 +46,7 @@ function PermModes({ uid, pid, mode, onChange }) {
           type="radio"
           name={gid}
           checked={mode === 'deny'}
+          disabled={disabled}
           onChange={() => onChange(pid, 'deny')}
         />{' '}
         Deny
@@ -52,9 +57,10 @@ function PermModes({ uid, pid, mode, onChange }) {
 
 function UserEditorPanel({
   user,
-  roles,
+  assignableRoles,
   permissionsSorted,
   selfId,
+  actorUser,
   onClose,
   onRefresh,
 }) {
@@ -69,6 +75,17 @@ function UserEditorPanel({
   const [pending, setPending] = useState(false);
 
   const isSelf = String(user._id) === String(selfId);
+  const canHierarchyEdit = Boolean(actorUser && !isSelf && canManageAnotherUser(actorUser, user));
+
+  /** Keep select valid if backend returns a higher role row (panel should rarely open then). */
+  const roleChoices = useMemo(() => {
+    const current = user.role ? [user.role] : [];
+    const byId = new Map();
+    [...assignableRoles, ...current].forEach((r) => {
+      if (r && r._id) byId.set(String(r._id), r);
+    });
+    return Array.from(byId.values());
+  }, [assignableRoles, user.role]);
 
   useEffect(() => {
     setName(user.name ?? '');
@@ -216,28 +233,49 @@ function UserEditorPanel({
         <legend>Role & status</legend>
         <label>
           Role
-          <select value={roleId} onChange={(e) => setRoleId(e.target.value)}>
-            {roles.map((r) => (
-              <option style={{ color: 'black' }} key={r._id} value={r._id}>
-                {r.name}
-              </option>
-            ))}
+          <select
+            value={roleId}
+            onChange={(e) => setRoleId(e.target.value)}
+            disabled={pending || isSelf || !canHierarchyEdit}
+          >
+            {roleChoices.map((r) => {
+              const assignable = assignableRoles.some((x) => String(x._id) === String(r._id));
+              return (
+                <option style={{ color: 'black' }} key={r._id} value={r._id} disabled={!assignable}>
+                  {r.name}
+                  {!assignable ? ' (not assignable)' : ''}
+                </option>
+              );
+            })}
           </select>
         </label>
-        <button type="button" className="admin-users-page__btn" disabled={pending} onClick={applyRole}>
+        {isSelf ? (
+          <p className="admin-users-page__hint-small">You cannot change your own role here.</p>
+        ) : null}
+        <button
+          type="button"
+          className="admin-users-page__btn"
+          disabled={pending || isSelf || !canHierarchyEdit}
+          onClick={applyRole}
+        >
           Apply role
         </button>
         <label className="admin-users-page__check">
           <input
             type="checkbox"
             checked={isActive}
-            disabled={pending || isSelf}
+            disabled={pending || isSelf || !canHierarchyEdit}
             onChange={(e) => setIsActive(e.target.checked)}
           />
           Active account
           {isSelf ? <span className="admin-users-page__hint">Cannot deactivate yourself here.</span> : null}
         </label>
-        <button type="button" className="admin-users-page__btn" disabled={pending || isSelf} onClick={applyStatus}>
+        <button
+          type="button"
+          className="admin-users-page__btn"
+          disabled={pending || isSelf || !canHierarchyEdit}
+          onClick={applyStatus}
+        >
           Save status
         </button>
       </fieldset>
@@ -245,7 +283,8 @@ function UserEditorPanel({
       <fieldset className="admin-users-page__fieldset">
         <legend>Overrides (grant beyond role · or deny despite role/custom)</legend>
         <p className="admin-users-page__hint-small">
-          Deny wins when both overlap. Admin role still bypasses API checks inside the middleware.
+          Deny wins when both overlap. Only available for accounts you are allowed to manage (below your
+          privilege level).
         </p>
         <div className="admin-users-page__perm-list">
           {permissionsSorted.map((p) => (
@@ -256,11 +295,17 @@ function UserEditorPanel({
                 pid={String(p._id)}
                 mode={permModes[String(p._id)] ?? 'inherit'}
                 onChange={handlePermRadio}
+                disabled={isSelf || !canHierarchyEdit}
               />
             </div>
           ))}
         </div>
-        <button type="button" className="admin-users-page__btn" disabled={pending || permissionsSorted.length === 0} onClick={saveOverrides}>
+        <button
+          type="button"
+          className="admin-users-page__btn"
+          disabled={pending || permissionsSorted.length === 0 || isSelf || !canHierarchyEdit}
+          onClick={saveOverrides}
+        >
           Save overrides
         </button>
       </fieldset>
@@ -270,7 +315,7 @@ function UserEditorPanel({
         <button
           type="button"
           className="admin-users-page__btn admin-users-page__btn--danger"
-          disabled={pending || isSelf}
+          disabled={pending || isSelf || !canHierarchyEdit}
           onClick={removeUser}
         >
           Delete user
@@ -283,6 +328,7 @@ function UserEditorPanel({
 export default function AdminUsersPage() {
   const { user: me } = useAuthUser();
   const selfId = me?._id;
+  const roleActive = me?.role?.isActive !== false;
 
   const [users, setUsers] = useState([]);
   const [page, setPage] = useState(1);
@@ -315,18 +361,32 @@ export default function AdminUsersPage() {
     [permissions],
   );
 
+  const assignableRoles = useMemo(
+    () => (me ? roles.filter((r) => r.isActive !== false && canAssignRoleInUi(me, r)) : []),
+    [roles, me],
+  );
+
   const loadRolesAndPermissions = useCallback(async () => {
     try {
       const [rolesBody, permsBody] = await Promise.all([rolesApi.listRoles(), rolesApi.listPermissions()]);
       const rList = Array.isArray(rolesBody?.data?.roles) ? rolesBody.data.roles : [];
       setRoles(rList);
       setPermissions(Array.isArray(permsBody?.data?.permissions) ? permsBody.data.permissions : []);
-      const defaultMember = rList.find((r) => r.name === 'Member');
-      setCRoleId((prev) => prev || (defaultMember ? defaultMember._id : ''));
     } catch (e) {
       setBanner(fmtErr(e));
     }
   }, []);
+
+  useEffect(() => {
+    if (!roles.length || !me) return;
+    setCRoleId((prev) => {
+      if (prev && roles.some((r) => String(r._id) === String(prev))) return prev;
+      const emp = roles.find((r) => r.name === ROLE_NAME.EMPLOYEE);
+      if (emp) return emp._id;
+      const firstAssignable = roles.find((r) => canAssignRoleInUi(me, r));
+      return firstAssignable ? firstAssignable._id : roles[0]?._id || '';
+    });
+  }, [roles, me]);
 
   const loadUsers = useCallback(async () => {
     setLoading(true);
@@ -407,6 +467,9 @@ export default function AdminUsersPage() {
         title="User management"
         subtitle="Search, paginate, create accounts, and adjust roles, status, and per-user permission grants or denials."
       />
+      {!roleActive ? (
+        <p className="admin-users-page__banner">Your role is inactive. Please contact admin.</p>
+      ) : null}
 
       {banner ? <p className="admin-users-page__banner">{banner}</p> : null}
 
@@ -436,6 +499,7 @@ export default function AdminUsersPage() {
         <button
           type="button"
           className="admin-users-page__btn admin-users-page__btn--secondary"
+          disabled={!roleActive}
           onClick={() => setCreateOpen((o) => !o)}
         >
           {createOpen ? 'Cancel' : 'Create user'}
@@ -461,8 +525,8 @@ export default function AdminUsersPage() {
             <label>
               Role
               <select value={cRoleId} onChange={(e) => setCRoleId(e.target.value)}>
-                {roles.map((r) => (
-                  <option key={r._id} value={r._id}>
+                {assignableRoles.map((r) => (
+                  <option style={{ color: 'black' }} key={r._id} value={r._id}>
                     {r.name}
                   </option>
                 ))}
@@ -473,7 +537,7 @@ export default function AdminUsersPage() {
               Active
             </label>
           </div>
-          <button type="submit" className="admin-users-page__btn">
+          <button type="submit" className="admin-users-page__btn" disabled={!assignableRoles.length || !roleActive}>
             Create account
           </button>
         </form>
@@ -504,6 +568,7 @@ export default function AdminUsersPage() {
                     <button
                       type="button"
                       className="admin-users-page__btn admin-users-page__btn--small admin-users-page__btn--ghost"
+                      disabled={!roleActive}
                       onClick={() => setSelected(u)}
                     >
                       Manage
@@ -522,7 +587,8 @@ export default function AdminUsersPage() {
           <UserEditorPanel
             key={editorUser._id}
             user={editorUser}
-            roles={roles}
+            assignableRoles={assignableRoles}
+            actorUser={me}
             permissionsSorted={permissionsSorted}
             selfId={selfId}
             onClose={() => setSelected(null)}

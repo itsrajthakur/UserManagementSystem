@@ -15,7 +15,7 @@ export default function MemberDashboard() {
   return (
     <section className="dash-stack">
       <div>
-        <h1 style={{ margin: '0 0 0.35rem', fontSize: '1.35rem' }}>Member dashboard</h1>
+        <h1 style={{ margin: '0 0 0.35rem', fontSize: '1.35rem' }}>Employee dashboard</h1>
         <p className="dash-intro">
           Limited workspace view. Extra capabilities only appear when your role or custom grants allow
           them.
@@ -35,7 +35,7 @@ export default function MemberDashboard() {
           <h3>Granted actions</h3>
           <p>Union of role permissions and any admin-assigned custom permissions.</p>
           {permissions.length === 0 ? (
-            <p className="dash-muted">No explicit grants yet — default Member role may be empty.</p>
+            <p className="dash-muted">No explicit grants yet — Employee role defaults may be empty.</p>
           ) : (
             <div className="dash-badges">
               {permissions.map((p) => (

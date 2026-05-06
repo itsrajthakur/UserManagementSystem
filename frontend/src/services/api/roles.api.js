@@ -25,6 +25,10 @@ export const rolesApi = {
     const { data } = await api.delete(`/roles/${roleId}`);
     return data;
   },
+  async restoreRole(roleId) {
+    const { data } = await api.post(`/roles/${roleId}/restore`);
+    return data;
+  },
 
   async createPermission(body) {
     const { data } = await api.post('/permissions', body);
@@ -38,6 +42,10 @@ export const rolesApi = {
 
   async deletePermission(permissionId) {
     const { data } = await api.delete(`/permissions/${permissionId}`);
+    return data;
+  },
+  async restorePermission(permissionId) {
+    const { data } = await api.post(`/permissions/${permissionId}/restore`);
     return data;
   },
 };
