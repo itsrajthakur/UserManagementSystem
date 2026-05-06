@@ -1,17 +1,59 @@
 .profile-page {
-  max-width: 520px;
+  width: min(980px, 100%);
+  margin: 0 auto;
+}
+
+.profile-page__header {
+  margin-bottom: 1rem;
 }
 
 .profile-page__title {
+  margin: 0;
+  font-size: 1.6rem;
+  letter-spacing: -0.02em;
+}
+
+.profile-page__subtitle {
+  margin: 0.45rem 0 0;
+  color: rgba(229, 231, 235, 0.72);
+  font-size: 0.95rem;
+}
+
+.profile-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+
+.profile-card {
+  border: 1px solid var(--app-border, #272a34);
+  background: var(--app-surface, #161922);
+  border-radius: 14px;
+  padding: 1.15rem;
+}
+
+.profile-card--hero {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.profile-card__hero-content h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.profile-card__title {
   margin: 0 0 1rem;
-  font-size: 1.35rem;
+  font-size: 1.05rem;
 }
 
 .profile-page__banner {
-  padding: 0.6rem 0.75rem;
+  padding: 0.65rem 0.8rem;
   border-radius: 8px;
-  font-size: 0.88rem;
-  margin-bottom: 1rem;
+  font-size: 0.86rem;
+  margin: 0 0 1rem;
 }
 
 .profile-page__banner--error {
@@ -19,18 +61,15 @@
   color: #fecaca;
 }
 
-.profile-page__muted {
-  margin: 0;
-  opacity: 0.75;
-  font-size: 0.9rem;
+.profile-page__banner--ok {
+  background: rgba(34, 197, 94, 0.14);
+  color: #bbf7d0;
 }
 
-.profile-page__photo {
-  display: flex;
-  align-items: flex-start;
-  gap: 1.25rem;
-  margin-bottom: 1.75rem;
-  flex-wrap: wrap;
+.profile-page__muted {
+  margin: 0.25rem 0 0;
+  opacity: 0.78;
+  font-size: 0.9rem;
 }
 
 .profile-page__avatar-wrap {
@@ -38,19 +77,19 @@
 }
 
 .profile-page__avatar {
-  width: 96px;
-  height: 96px;
+  width: 108px;
+  height: 108px;
   border-radius: 50%;
   object-fit: cover;
-  border: 1px solid var(--app-border, #272a34);
+  border: 1px solid rgba(129, 140, 248, 0.32);
 }
 
 .profile-page__avatar--placeholder {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(129, 140, 248, 0.2);
-  font-size: 2rem;
+  background: rgba(129, 140, 248, 0.24);
+  font-size: 2.1rem;
   font-weight: 600;
 }
 
@@ -62,18 +101,8 @@
   clip: rect(0 0 0 0);
 }
 
-.profile-page__section {
-  border-top: 1px solid var(--app-border, #272a34);
-  padding-top: 1.25rem;
-}
-
-.profile-page__section-title {
-  margin: 0 0 1rem;
-  font-size: 1.05rem;
-}
-
 .profile-page__field {
-  margin-bottom: 1rem;
+  margin-bottom: 0.95rem;
 }
 
 .profile-page__field label {
@@ -85,18 +114,19 @@
 
 .profile-page__field input {
   width: 100%;
-  max-width: 340px;
-  padding: 0.55rem 0.65rem;
+  padding: 0.62rem 0.72rem;
   border-radius: 8px;
   border: 1px solid var(--app-border, #272a34);
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.03);
   color: inherit;
   font: inherit;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .profile-page__field input:focus {
   outline: none;
   border-color: rgba(129, 140, 248, 0.55);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.14);
 }
 
 .profile-page__err {
@@ -106,8 +136,8 @@
 }
 
 .profile-page__btn {
-  margin-top: 0.35rem;
-  padding: 0.5rem 1rem;
+  margin-top: 0.45rem;
+  padding: 0.58rem 1rem;
   border: none;
   border-radius: 8px;
   font: inherit;
@@ -115,10 +145,12 @@
   cursor: pointer;
   background: #6366f1;
   color: #fff;
+  transition: transform 0.15s ease, filter 0.2s ease;
 }
 
 .profile-page__btn:hover:not(:disabled) {
-  filter: brightness(1.05);
+  transform: translateY(-1px);
+  filter: brightness(1.06);
 }
 
 .profile-page__btn:disabled {
@@ -127,13 +159,29 @@
 }
 
 .profile-page__btn--secondary {
-  background: transparent;
-  border: 1px solid var(--app-border, #272a34);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(129, 140, 248, 0.35);
   color: inherit;
 }
 
 .profile-page__hint {
-  margin: 0.5rem 0 0;
+  margin: 0.55rem 0 0;
   font-size: 0.85rem;
-  opacity: 0.82;
+  opacity: 0.88;
+}
+
+@media (max-width: 760px) {
+  .profile-page__title {
+    font-size: 1.35rem;
+  }
+
+  .profile-card {
+    padding: 0.95rem;
+    border-radius: 12px;
+  }
+
+  .profile-page__avatar {
+    width: 88px;
+    height: 88px;
+  }
 }

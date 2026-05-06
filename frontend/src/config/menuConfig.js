@@ -13,11 +13,6 @@ export const mainNavItems = [
     when: () => true,
   },
   {
-    to: '/profile',
-    label: 'Profile',
-    when: (user) => Boolean(user),
-  },
-  {
     to: '/users',
     label: 'User management',
     when: (user) => hasPermission(user, RESOURCES.USERS, ACTIONS.READ),

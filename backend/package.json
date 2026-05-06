@@ -22,12 +22,13 @@
     "express": "^5.2.1",
     "express-mongo-sanitize": "^2.2.0",
     "express-rate-limit": "^8.2.1",
-    "helmet": "^8.1.0",
     "express-validator": "^7.3.1",
+    "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^8.21.2",
-    "multer": "^2.0.2",
     "morgan": "^1.10.1",
+    "multer": "^2.0.2",
+    "nodemailer": "^8.0.7",
     "winston": "^3.19.0"
   },
   "devDependencies": {

@@ -17,44 +17,6 @@ function permLabel(p) {
   return `${p.resource}:${p.action}`;
 }
 
-function PermModes({ uid, pid, mode, onChange, disabled }) {
-  const gid = `${uid}:${pid}`;
-  return (
-    <div className="admin-users-page__perm-modes">
-      <label className="admin-users-page__perm-label">
-        <input
-          type="radio"
-          name={gid}
-          checked={mode === 'inherit'}
-          disabled={disabled}
-          onChange={() => onChange(pid, 'inherit')}
-        />{' '}
-        Role
-      </label>
-      <label className="admin-users-page__perm-label">
-        <input
-          type="radio"
-          name={gid}
-          checked={mode === 'grant'}
-          disabled={disabled}
-          onChange={() => onChange(pid, 'grant')}
-        />{' '}
-        Grant
-      </label>
-      <label className="admin-users-page__perm-label">
-        <input
-          type="radio"
-          name={gid}
-          checked={mode === 'deny'}
-          disabled={disabled}
-          onChange={() => onChange(pid, 'deny')}
-        />{' '}
-        Deny
-      </label>
-    </div>
-  );
-}
-
 function UserEditorPanel({
   user,
   assignableRoles,
@@ -86,6 +48,26 @@ function UserEditorPanel({
     });
     return Array.from(byId.values());
   }, [assignableRoles, user.role]);
+  const actionColumns = useMemo(() => {
+    const preferred = ['create', 'read', 'update', 'delete'];
+    const discovered = [...new Set(permissionsSorted.map((p) => String(p.action || '').toLowerCase()))];
+    const known = preferred.filter((a) => discovered.includes(a));
+    const extra = discovered.filter((a) => !preferred.includes(a)).sort((a, b) => a.localeCompare(b));
+    return [...known, ...extra];
+  }, [permissionsSorted]);
+  const permissionMatrix = useMemo(() => {
+    const table = new Map();
+    permissionsSorted.forEach((p) => {
+      const resource = String(p.resource || '').toLowerCase();
+      const action = String(p.action || '').toLowerCase();
+      if (!resource || !action) return;
+      if (!table.has(resource)) table.set(resource, new Map());
+      table.get(resource).set(action, p);
+    });
+    return Array.from(table.entries())
+      .map(([resource, actions]) => ({ resource, actions }))
+      .sort((a, b) => a.resource.localeCompare(b.resource));
+  }, [permissionsSorted]);
 
   useEffect(() => {
     setName(user.name ?? '');
@@ -219,11 +201,11 @@ function UserEditorPanel({
             Name
             <input value={name} onChange={(e) => setName(e.target.value)} />
           </label>
-          <label>
+          <label className="mt-2">
             Email
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
           </label>
-          <button type="submit" className="admin-users-page__btn" disabled={pending}>
+          <button type="submit" className="mt-2 admin-users-page__btn" disabled={pending}>
             Save details
           </button>
         </fieldset>
@@ -254,7 +236,7 @@ function UserEditorPanel({
         ) : null}
         <button
           type="button"
-          className="admin-users-page__btn"
+          className="admin-users-page__btn mt-2"
           disabled={pending || isSelf || !canHierarchyEdit}
           onClick={applyRole}
         >
@@ -281,24 +263,62 @@ function UserEditorPanel({
       </fieldset>
 
       <fieldset className="admin-users-page__fieldset">
-        <legend>Overrides (grant beyond role · or deny despite role/custom)</legend>
+        <legend>Permissions matrix (grant beyond role · or deny despite role/custom)</legend>
         <p className="admin-users-page__hint-small">
           Deny wins when both overlap. Only available for accounts you are allowed to manage (below your
           privilege level).
         </p>
-        <div className="admin-users-page__perm-list">
-          {permissionsSorted.map((p) => (
-            <div key={p._id} className="admin-users-page__perm-row">
-              <div className="admin-users-page__perm-key">{permLabel(p)}</div>
-              <PermModes
-                uid={String(user._id)}
-                pid={String(p._id)}
-                mode={permModes[String(p._id)] ?? 'inherit'}
-                onChange={handlePermRadio}
-                disabled={isSelf || !canHierarchyEdit}
-              />
-            </div>
-          ))}
+        <div className="admin-users-page__override-legend">
+          <span><strong>Role</strong> = inherit</span>
+          <span><strong>Grant</strong> = force allow</span>
+          <span><strong>Deny</strong> = force block</span>
+        </div>
+        <div className="admin-users-page__matrix-wrap">
+          <table className="admin-users-page__matrix">
+            <thead>
+              <tr>
+                <th scope="col">Resource</th>
+                {actionColumns.map((action) => (
+                  <th key={action} scope="col">
+                    {action.charAt(0).toUpperCase() + action.slice(1)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {permissionMatrix.map(({ resource, actions }) => (
+                <tr key={resource}>
+                  <th scope="row">{resource.charAt(0).toUpperCase() + resource.slice(1)}</th>
+                  {actionColumns.map((action) => {
+                    const p = actions.get(action);
+                    if (!p) {
+                      return (
+                        <td key={`${resource}:${action}`}>
+                          <span className="admin-users-page__matrix-empty" />
+                        </td>
+                      );
+                    }
+                    const pid = String(p._id);
+                    return (
+                      <td key={pid}>
+                        <select
+                          value={permModes[pid] ?? 'inherit'}
+                          onChange={(e) => handlePermRadio(pid, e.target.value)}
+                          disabled={isSelf || !canHierarchyEdit}
+                          className="admin-users-page__mode-select"
+                          aria-label={`${resource}:${action} override mode`}
+                        >
+                          <option value="inherit">Role</option>
+                          <option value="grant">Grant</option>
+                          <option value="deny">Deny</option>
+                        </select>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
         <button
           type="button"
@@ -460,6 +480,8 @@ export default function AdminUsersPage() {
   }, [loadUsers, selected?._id]);
 
   const editorUser = selected ? users.find((u) => String(u._id) === String(selected._id)) || selected : null;
+  const activeCount = users.filter((u) => u.isActive !== false).length;
+  const inactiveCount = Math.max(0, users.length - activeCount);
 
   return (
     <div className="admin-users-page">
@@ -472,6 +494,21 @@ export default function AdminUsersPage() {
       ) : null}
 
       {banner ? <p className="admin-users-page__banner">{banner}</p> : null}
+
+      <div className="admin-users-page__stats">
+        <article className="admin-users-page__stat-card">
+          <p>Total users (page)</p>
+          <strong>{users.length}</strong>
+        </article>
+        <article className="admin-users-page__stat-card">
+          <p>Active</p>
+          <strong>{activeCount}</strong>
+        </article>
+        <article className="admin-users-page__stat-card">
+          <p>Inactive</p>
+          <strong>{inactiveCount}</strong>
+        </article>
+      </div>
 
       <div className="admin-users-page__toolbar">
         <form
@@ -547,6 +584,10 @@ export default function AdminUsersPage() {
 
       <div className="admin-users-page__layout">
         <div className="admin-users-page__table-wrap">
+          <div className="admin-users-page__table-head">
+            <h2>Users</h2>
+            <p>Click Manage to edit role, status, and overrides.</p>
+          </div>
           <table className="admin-users-page__table">
             <thead>
               <tr>
@@ -563,7 +604,17 @@ export default function AdminUsersPage() {
                   <td>{u.name}</td>
                   <td>{u.email}</td>
                   <td>{u.role?.name ?? '—'}</td>
-                  <td>{u.isActive === false ? 'Inactive' : 'Active'}</td>
+                  <td>
+                    <span
+                      className={
+                        u.isActive === false
+                          ? 'admin-users-page__status admin-users-page__status--inactive'
+                          : 'admin-users-page__status'
+                      }
+                    >
+                      {u.isActive === false ? 'Inactive' : 'Active'}
+                    </span>
+                  </td>
                   <td>
                     <button
                       type="button"

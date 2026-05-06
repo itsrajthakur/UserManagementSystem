@@ -10,6 +10,7 @@ const {
   appPublicUrl,
   isProd,
 } = require('../config/env');
+const { sendPasswordResetEmail } = require('../utils/mailer');
 
 const BCRYPT_ROUNDS = 12;
 const RESET_EXPIRE_MS = 60 * 60 * 1000;
@@ -199,13 +200,16 @@ async function forgotPassword(req, res, next) {
     }
 
     const raw = generateRawToken(32);
+    const resetUrl = `${appPublicUrl}/reset-password?token=${raw}`;
     user.passwordResetTokenHash = hashToken(raw);
     user.passwordResetExpires = new Date(Date.now() + RESET_EXPIRE_MS);
     await user.save();
 
+    await sendPasswordResetEmail({ toEmail: user.email, resetUrl });
+
     if (!isProd) {
-      logger.info('Password reset token (dev only)', {
-        resetUrl: `${appPublicUrl}/reset-password?token=${raw}`,
+      logger.info('Password reset email queued', {
+        email: user.email,
       });
     }
 
