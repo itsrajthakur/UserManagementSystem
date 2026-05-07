@@ -13,6 +13,9 @@ function getTransporter() {
     host: smtp.host,
     port: smtp.port,
     secure: smtp.secure,
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 12000,
     auth: {
       user: smtp.user,
       pass: smtp.pass,
