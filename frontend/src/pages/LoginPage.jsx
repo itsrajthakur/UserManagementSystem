@@ -60,7 +60,14 @@ export default function LoginPage() {
         setStoredToken(token);
         await refreshUser();
         const needsVerify = Boolean(res?.data?.needsEmailVerification);
-        navigate('/', { replace: true, state: needsVerify ? { emailUnverified: true } : undefined });
+        const needsPasswordChange = Boolean(res?.data?.user?.mustChangePassword);
+        const destination = needsPasswordChange ? '/change-password' : '/';
+        const navState = needsPasswordChange
+          ? { forcePasswordReset: true }
+          : needsVerify
+            ? { emailUnverified: true }
+            : undefined;
+        navigate(destination, { replace: true, state: navState });
         return;
       }
 

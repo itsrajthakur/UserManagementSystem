@@ -187,19 +187,28 @@ export default function ProfilePage() {
             <div className="profile-card__hero-content">
               <h2>{detail?.name ?? ctxUser?.name ?? 'User'}</h2>
               <p className="profile-page__muted">{detail?.role?.name ?? ctxUser?.role?.name ?? 'No role'}</p>
-              <p className="profile-page__muted">{detail?.email ?? ctxUser?.email ?? 'No email'}</p>
+              <span className="profile-page__muted">{detail?.email ?? ctxUser?.email ?? 'No email'}</span>
+              <span
+                className={
+                  emailVerified ? 'profile-page__badge profile-page__badge--ok' : 'profile-page__badge'
+                }
+              >
+                {emailVerified ? 'Email verified' : 'Email not verified'}
+              </span>
               <div className="profile-page__status-row">
-                <span
-                  className={
-                    emailVerified ? 'profile-page__badge profile-page__badge--ok' : 'profile-page__badge'
-                  }
+                <button
+                  type="button"
+                  className="profile-page__btn profile-page__btn--secondary"
+                  aria-controls={pickId}
+                  disabled={picPending}
+                  onClick={() => fileInputRef.current?.click()}
                 >
-                  {emailVerified ? 'Email verified' : 'Email not verified'}
-                </span>
+                  {picPending ? 'Uploading...' : 'Change Photo'}
+                </button>
                 {!emailVerified ? (
                   <button
                     type="button"
-                    className="profile-page__btn profile-page__btn--ghost"
+                    className="profile-page__btn profile-page__btn--secondary"
                     onClick={handleResendVerification}
                     disabled={verifyPending}
                   >
@@ -216,15 +225,6 @@ export default function ProfilePage() {
                 className="profile-page__file"
                 onChange={handlePickFile}
               />
-              <button
-                type="button"
-                className="profile-page__btn profile-page__btn--secondary"
-                aria-controls={pickId}
-                disabled={picPending}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                {picPending ? 'Uploading...' : 'Change Photo'}
-              </button>
               {picMsg ? <p className="profile-page__hint">{picMsg}</p> : null}
             </div>
           </section>

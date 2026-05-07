@@ -81,6 +81,7 @@
 }
 
 .profile-page__badge {
+  margin-top: 0.5rem;
   display: inline-flex;
   align-items: center;
   padding: 0.15rem 0.5rem;
@@ -159,8 +160,8 @@
 }
 
 .profile-page__btn {
-  margin-top: 0.45rem;
-  padding: 0.58rem 1rem;
+  /* margin-top: 0.45rem; */
+  padding: 0.5rem 0.8rem;
   border: none;
   border-radius: 8px;
   font: inherit;

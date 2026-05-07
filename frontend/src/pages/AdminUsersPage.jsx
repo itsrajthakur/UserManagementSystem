@@ -367,7 +367,6 @@ export default function AdminUsersPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [cName, setCName] = useState('');
   const [cEmail, setCEmail] = useState('');
-  const [cPassword, setCPassword] = useState('');
   const [cRoleId, setCRoleId] = useState('');
   const [cActive, setCActive] = useState(true);
 
@@ -447,23 +446,17 @@ export default function AdminUsersPage() {
   async function submitCreate(ev) {
     ev.preventDefault();
     setBanner(null);
-    if (!cPassword || cPassword.length < 8 || !/\d/.test(cPassword) || !/[a-zA-Z]/.test(cPassword)) {
-      setBanner('Password: at least 8 characters, include a letter and a number.');
-      return;
-    }
     try {
       await userApi.createUser({
         name: cName.trim(),
         email: cEmail.trim(),
-        password: cPassword,
         roleId: cRoleId || undefined,
         isActive: cActive,
       });
       setCreateOpen(false);
       setCName('');
       setCEmail('');
-      setCPassword('');
-      setBanner('User created.');
+      setBanner('User created successfully. Login credentials sent to registered email.');
       setPage(1);
       await loadUsers();
     } catch (e) {
@@ -556,10 +549,6 @@ export default function AdminUsersPage() {
               <input type="email" value={cEmail} onChange={(e) => setCEmail(e.target.value)} required />
             </label>
             <label>
-              Password
-              <input type="password" value={cPassword} onChange={(e) => setCPassword(e.target.value)} required />
-            </label>
-            <label>
               Role
               <select value={cRoleId} onChange={(e) => setCRoleId(e.target.value)}>
                 {assignableRoles.map((r) => (
@@ -574,6 +563,9 @@ export default function AdminUsersPage() {
               Active
             </label>
           </div>
+          <p className="admin-users-page__hint-small">
+            A secure temporary password will be generated automatically and emailed to the user.
+          </p>
           <button type="submit" className="admin-users-page__btn" disabled={!assignableRoles.length || !roleActive}>
             Create account
           </button>

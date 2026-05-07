@@ -76,8 +76,33 @@ async function sendVerificationEmail({ toEmail, verifyUrl }) {
   });
 }
 
+async function sendAdminCreatedUserCredentialsEmail({ toEmail, tempPassword, loginUrl }) {
+  if (!isSmtpConfigured()) {
+    throw new Error('SMTP is not configured. Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM_EMAIL');
+  }
+
+  const transporter = getTransporter();
+  await transporter.sendMail({
+    from: `${smtp.fromName} <${smtp.fromEmail}>`,
+    to: toEmail,
+    subject: 'Your account has been created',
+    text: `Your account has been created by an administrator.\n\nLogin email: ${toEmail}\nTemporary password: ${tempPassword}\nLogin URL: ${loginUrl}\n\nPlease login and reset your password.`,
+    html: `
+      <div style="font-family: Arial, sans-serif; line-height: 1.5;">
+        <h2 style="margin: 0 0 12px;">Your account is ready</h2>
+        <p>Your account has been created by an administrator.</p>
+        <p><strong>Login email:</strong> ${toEmail}</p>
+        <p><strong>Temporary password:</strong> ${tempPassword}</p>
+        <p><strong>Login URL:</strong> <a href="${loginUrl}">${loginUrl}</a></p>
+        <p style="margin-top: 14px;">Please login and reset your password.</p>
+      </div>
+    `,
+  });
+}
+
 module.exports = {
   isSmtpConfigured,
   sendPasswordResetEmail,
   sendVerificationEmail,
+  sendAdminCreatedUserCredentialsEmail,
 };

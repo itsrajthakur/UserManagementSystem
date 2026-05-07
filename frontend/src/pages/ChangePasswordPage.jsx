@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuthUser } from '../context/AuthUserContext';
 import { changeMyPassword } from '../services/userService';
 import './ProfilePage.css';
@@ -19,7 +19,8 @@ function validatePasswordStrength(value) {
 }
 
 export default function ChangePasswordPage() {
-  const { user, loading } = useAuthUser();
+  const navigate = useNavigate();
+  const { user, loading, refreshUser } = useAuthUser();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -57,10 +58,12 @@ export default function ChangePasswordPage() {
     setSubmitting(true);
     try {
       await changeMyPassword({ currentPassword, newPassword });
+      await refreshUser();
       setSuccess('Password updated successfully.');
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
+      setTimeout(() => navigate('/', { replace: true }), 700);
     } catch (err) {
       setError(formatError(err));
     } finally {
@@ -75,6 +78,11 @@ export default function ChangePasswordPage() {
         <p className="profile-page__subtitle">
           Use a strong password with at least 8 characters, including letters and numbers.
         </p>
+        {user?.mustChangePassword ? (
+          <p className="profile-page__banner profile-page__banner--error">
+            You must reset your password before accessing the dashboard.
+          </p>
+        ) : null}
       </header>
 
       <section className="profile-card profile-card--form">

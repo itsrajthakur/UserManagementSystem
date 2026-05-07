@@ -45,7 +45,8 @@ router.patch('/me', ...activeAuth, updateMyProfileValidation, validateRequest, u
 router.post('/me/picture', ...activeAuth, uploadAvatarSingle, uploadMyPicture);
 router.post(
   '/me/password',
-  ...activeAuth,
+  authenticate,
+  requireActiveUser,
   changePasswordValidation,
   validateRequest,
   changeMyPassword

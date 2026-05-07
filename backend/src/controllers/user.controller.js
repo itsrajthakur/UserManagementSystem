@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const bcrypt = require('bcrypt');
+const crypto = require('crypto');
 const { User, Role, Permission } = require('../models');
 const createHttpError = require('../utils/httpError');
 const { RESOURCES, ACTIONS, ROLE_LEVEL, EMPLOYEE_ROLE_NAME } = require('../constants/rbac');
@@ -16,9 +17,11 @@ const { AVATAR_PUBLIC_PREFIX, AVATAR_DIR } = require('../middlewares/uploadAvata
 const { escapeRegex } = require('../utils/escapeRegex');
 const { appPublicUrl, isProd } = require('../config/env');
 const { hashToken, generateRawToken } = require('../utils/tokenHash');
-const { sendVerificationEmail } = require('../utils/mailer');
+const { sendVerificationEmail, sendAdminCreatedUserCredentialsEmail } = require('../utils/mailer');
+const logger = require('../utils/logger');
 
 const BCRYPT_ROUNDS = 12;
+const TEMP_PASSWORD_LENGTH = 14;
 
 const POPULATE_ROLE_USER_LIST = 'name description roleLevel isActive';
 const POPULATE_ROLE_PROFILE = 'name roleLevel isActive';
@@ -29,6 +32,32 @@ function toPublicUrl(relativePath) {
     return relativePath;
   }
   return relativePath;
+}
+
+function generateTemporaryPassword(length = TEMP_PASSWORD_LENGTH) {
+  const lower = 'abcdefghjkmnpqrstuvwxyz';
+  const upper = 'ABCDEFGHJKMNPQRSTUVWXYZ';
+  const digits = '23456789';
+  const symbols = '@#$%*!?';
+  const all = `${lower}${upper}${digits}${symbols}`;
+
+  const chars = [
+    lower[crypto.randomInt(lower.length)],
+    upper[crypto.randomInt(upper.length)],
+    digits[crypto.randomInt(digits.length)],
+    symbols[crypto.randomInt(symbols.length)],
+  ];
+
+  while (chars.length < length) {
+    chars.push(all[crypto.randomInt(all.length)]);
+  }
+
+  for (let i = chars.length - 1; i > 0; i -= 1) {
+    const j = crypto.randomInt(i + 1);
+    [chars[i], chars[j]] = [chars[j], chars[i]];
+  }
+
+  return chars.join('');
 }
 
 async function getMyProfile(req, res, next) {
@@ -424,6 +453,7 @@ async function changeMyPassword(req, res, next) {
     }
 
     user.password = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+    user.mustChangePassword = false;
     await user.save();
 
     return res.json({ success: true, message: 'Password updated' });
@@ -434,7 +464,7 @@ async function changeMyPassword(req, res, next) {
 
 async function adminCreateUser(req, res, next) {
   try {
-    const { name, email, password, roleId, isActive } = req.body;
+    const { name, email, roleId, isActive } = req.body;
 
     let roleDoc;
     if (roleId) {
@@ -459,23 +489,43 @@ async function adminCreateUser(req, res, next) {
       return next(createHttpError(403, 'Cannot assign this role'));
     }
 
-    const exists = await User.findOne({ email: email.trim().toLowerCase(), isDeleted: false });
+    const normalizedEmail = email.trim().toLowerCase();
+    const exists = await User.findOne({ email: normalizedEmail, isDeleted: false });
     if (exists) return next(createHttpError(409, 'Email already registered'));
 
-    const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+    const tempPassword = generateTemporaryPassword();
+    const passwordHash = await bcrypt.hash(tempPassword, BCRYPT_ROUNDS);
     const user = await User.create({
       name: name.trim(),
-      email: email.trim().toLowerCase(),
+      email: normalizedEmail,
       password: passwordHash,
+      mustChangePassword: true,
       role: roleDoc._id,
       isActive: isActive !== false,
       emailVerified: false,
     });
 
+    const loginUrl = `${appPublicUrl}/login`;
+    setImmediate(async () => {
+      try {
+        await sendAdminCreatedUserCredentialsEmail({
+          toEmail: normalizedEmail,
+          tempPassword,
+          loginUrl,
+        });
+      } catch (mailErr) {
+        logger.error('Failed to send admin-created user credentials email', {
+          userId: String(user._id),
+          email: normalizedEmail,
+          error: mailErr.message,
+        });
+      }
+    });
+
     const populated = await fetchUserProfile(user._id);
     return res.status(201).json({
       success: true,
-      message: 'User created',
+      message: 'User created successfully. Login credentials sent to registered email.',
       data: { user: populated },
     });
   } catch (err) {

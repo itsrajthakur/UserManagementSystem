@@ -19,6 +19,10 @@ const userSchema = new mongoose.Schema(
       required: true,
       select: false,
     },
+    mustChangePassword: {
+      type: Boolean,
+      default: false,
+    },
     profilePic: {
       type: String,
       trim: true,

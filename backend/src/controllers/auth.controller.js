@@ -238,6 +238,7 @@ async function resetPassword(req, res, next) {
     user.password = await bcrypt.hash(password, BCRYPT_ROUNDS);
     user.passwordResetTokenHash = undefined;
     user.passwordResetExpires = undefined;
+    user.mustChangePassword = false;
     await user.save();
 
     return res.json({ success: true, message: 'Password has been reset. You can sign in.' });
