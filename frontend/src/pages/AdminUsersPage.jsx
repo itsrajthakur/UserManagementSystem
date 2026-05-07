@@ -632,6 +632,28 @@ export default function AdminUsersPage() {
           {users.length === 0 && !loading ? (
             <p className="admin-users-page__muted">No users match this query.</p>
           ) : null}
+
+          <div className="admin-users-page__pager">
+            <button
+              type="button"
+              className="admin-users-page__btn admin-users-page__btn--ghost"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              Previous
+            </button>
+            <span className="admin-users-page__muted">
+              Page {page} of {totalPages} · {total} users
+            </span>
+            <button
+              type="button"
+              className="admin-users-page__btn admin-users-page__btn--ghost"
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              Next
+            </button>
+          </div>
         </div>
 
         {editorUser ? (
@@ -646,28 +668,6 @@ export default function AdminUsersPage() {
             onRefresh={refreshAfterEdit}
           />
         ) : null}
-      </div>
-
-      <div className="admin-users-page__pager">
-        <button
-          type="button"
-          className="admin-users-page__btn admin-users-page__btn--ghost"
-          disabled={page <= 1}
-          onClick={() => setPage((p) => Math.max(1, p - 1))}
-        >
-          Previous
-        </button>
-        <span className="admin-users-page__muted">
-          Page {page} of {totalPages} · {total} users
-        </span>
-        <button
-          type="button"
-          className="admin-users-page__btn admin-users-page__btn--ghost"
-          disabled={page >= totalPages}
-          onClick={() => setPage((p) => p + 1)}
-        >
-          Next
-        </button>
       </div>
     </div>
   );

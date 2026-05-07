@@ -14,6 +14,9 @@ const {
 const { fetchUserProfile } = require('../utils/userAccess');
 const { AVATAR_PUBLIC_PREFIX, AVATAR_DIR } = require('../middlewares/uploadAvatar.middleware');
 const { escapeRegex } = require('../utils/escapeRegex');
+const { appPublicUrl, isProd } = require('../config/env');
+const { hashToken, generateRawToken } = require('../utils/tokenHash');
+const { sendVerificationEmail } = require('../utils/mailer');
 
 const BCRYPT_ROUNDS = 12;
 
@@ -52,7 +55,33 @@ async function updateMyProfile(req, res, next) {
     }
 
     if (name !== undefined) user.name = name.trim();
-    if (email !== undefined) user.email = email;
+
+    if (email !== undefined) {
+      const nextEmail = email.trim().toLowerCase();
+      if (nextEmail !== user.email) {
+        const exists = await User.findOne({ email: nextEmail, isDeleted: false, _id: { $ne: user._id } }).select(
+          '_id'
+        );
+        if (exists) {
+          return next(createHttpError(409, 'Email already registered'));
+        }
+
+        user.email = nextEmail;
+        user.emailVerified = false;
+        const raw = generateRawToken(32);
+        user.emailVerificationTokenHash = hashToken(raw);
+        user.emailVerificationExpires = new Date(Date.now() + 48 * 3600 * 1000);
+
+        const verifyUrl = `${appPublicUrl}/verify-email?token=${raw}`;
+        await sendVerificationEmail({ toEmail: user.email, verifyUrl });
+
+        if (!isProd) {
+          // Best-effort log for debugging
+          // eslint-disable-next-line no-console
+          console.log('Profile email update: verification email queued', { email: user.email });
+        }
+      }
+    }
 
     await user.save();
 
@@ -440,7 +469,7 @@ async function adminCreateUser(req, res, next) {
       password: passwordHash,
       role: roleDoc._id,
       isActive: isActive !== false,
-      emailVerified: true,
+      emailVerified: false,
     });
 
     const populated = await fetchUserProfile(user._id);
@@ -475,7 +504,31 @@ async function adminPatchUserDetails(req, res, next) {
     }
 
     if (name !== undefined) target.name = name.trim();
-    if (email !== undefined) target.email = email.trim().toLowerCase();
+    if (email !== undefined) {
+      const nextEmail = email.trim().toLowerCase();
+      if (nextEmail !== target.email) {
+        const exists = await User.findOne({ email: nextEmail, isDeleted: false, _id: { $ne: target._id } }).select(
+          '_id'
+        );
+        if (exists) {
+          return next(createHttpError(409, 'Email already registered'));
+        }
+
+        target.email = nextEmail;
+        target.emailVerified = false;
+        const raw = generateRawToken(32);
+        target.emailVerificationTokenHash = hashToken(raw);
+        target.emailVerificationExpires = new Date(Date.now() + 48 * 3600 * 1000);
+
+        const verifyUrl = `${appPublicUrl}/verify-email?token=${raw}`;
+        await sendVerificationEmail({ toEmail: target.email, verifyUrl });
+
+        if (!isProd) {
+          // eslint-disable-next-line no-console
+          console.log('Admin email update: verification email queued', { email: target.email });
+        }
+      }
+    }
 
     await target.save();
     const populated = await fetchUserProfile(target._id);

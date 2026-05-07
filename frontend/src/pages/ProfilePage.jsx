@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuthUser } from '../context/AuthUserContext';
 import { fetchMyProfile, patchMyProfile, uploadMyProfilePicture } from '../services/userService';
+import { resendVerificationEmail } from '../services/authService';
 import { resolveMediaUrl } from '../utils/resolveMediaUrl';
 import { validateProfileUpdate, isEmptyErrors } from '../utils/profileValidation';
 import './ProfilePage.css';
@@ -31,6 +32,8 @@ export default function ProfilePage() {
 
   const [picPending, setPicPending] = useState(false);
   const [picMsg, setPicMsg] = useState('');
+  const [verifyMsg, setVerifyMsg] = useState('');
+  const [verifyPending, setVerifyPending] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -70,6 +73,7 @@ export default function ProfilePage() {
   }
 
   const avatarHref = resolveMediaUrl(detail?.profilePic || ctxUser?.profilePic);
+  const emailVerified = detail?.emailVerified ?? ctxUser?.emailVerified ?? false;
 
   async function handleSave(ev) {
     ev.preventDefault();
@@ -106,6 +110,24 @@ export default function ProfilePage() {
       setSaveMsg(formatPatchError(err));
     } finally {
       setSavePending(false);
+    }
+  }
+
+  async function handleResendVerification() {
+    setVerifyMsg('');
+    setVerifyPending(true);
+    try {
+      const res = await resendVerificationEmail();
+      setVerifyMsg(res?.message || 'Verification email sent.');
+    } catch (err) {
+      const body = err.response?.data;
+      const msg =
+        (body && typeof body.message === 'string' && body.message) ||
+        err.message ||
+        'Could not send verification email';
+      setVerifyMsg(msg);
+    } finally {
+      setVerifyPending(false);
     }
   }
 
@@ -166,6 +188,26 @@ export default function ProfilePage() {
               <h2>{detail?.name ?? ctxUser?.name ?? 'User'}</h2>
               <p className="profile-page__muted">{detail?.role?.name ?? ctxUser?.role?.name ?? 'No role'}</p>
               <p className="profile-page__muted">{detail?.email ?? ctxUser?.email ?? 'No email'}</p>
+              <div className="profile-page__status-row">
+                <span
+                  className={
+                    emailVerified ? 'profile-page__badge profile-page__badge--ok' : 'profile-page__badge'
+                  }
+                >
+                  {emailVerified ? 'Email verified' : 'Email not verified'}
+                </span>
+                {!emailVerified ? (
+                  <button
+                    type="button"
+                    className="profile-page__btn profile-page__btn--ghost"
+                    onClick={handleResendVerification}
+                    disabled={verifyPending}
+                  >
+                    {verifyPending ? 'Sending…' : 'Resend verification email'}
+                  </button>
+                ) : null}
+              </div>
+              {verifyMsg ? <p className="profile-page__hint">{verifyMsg}</p> : null}
               <input
                 ref={fileInputRef}
                 id={pickId}

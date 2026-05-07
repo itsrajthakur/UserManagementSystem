@@ -49,7 +49,35 @@ async function sendPasswordResetEmail({ toEmail, resetUrl }) {
   });
 }
 
+async function sendVerificationEmail({ toEmail, verifyUrl }) {
+  if (!isSmtpConfigured()) {
+    throw new Error('SMTP is not configured. Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM_EMAIL');
+  }
+
+  const transporter = getTransporter();
+  await transporter.sendMail({
+    from: `${smtp.fromName} <${smtp.fromEmail}>`,
+    to: toEmail,
+    subject: 'Verify your email address',
+    text: `Welcome!\n\nPlease verify your email address by opening this link:\n${verifyUrl}\n\nIf you did not create an account, you can ignore this email.`,
+    html: `
+      <div style="font-family: Arial, sans-serif; line-height: 1.5;">
+        <h2 style="margin: 0 0 12px;">Verify your email</h2>
+        <p>Thanks for signing up. Please confirm your email address to start using the application.</p>
+        <p>
+          <a href="${verifyUrl}" style="display:inline-block;padding:10px 14px;background:#4f46e5;color:#fff;text-decoration:none;border-radius:6px;">
+            Verify Email
+          </a>
+        </p>
+        <p style="margin-top: 14px;">If the button does not work, use this link:</p>
+        <p><a href="${verifyUrl}">${verifyUrl}</a></p>
+      </div>
+    `,
+  });
+}
+
 module.exports = {
   isSmtpConfigured,
   sendPasswordResetEmail,
+  sendVerificationEmail,
 };

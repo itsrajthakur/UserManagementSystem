@@ -5,12 +5,8 @@ const { signToken } = require('../utils/jwt');
 const createHttpError = require('../utils/httpError');
 const { hashToken, generateRawToken } = require('../utils/tokenHash');
 const logger = require('../utils/logger');
-const {
-  requireEmailVerification,
-  appPublicUrl,
-  isProd,
-} = require('../config/env');
-const { sendPasswordResetEmail } = require('../utils/mailer');
+const { requireEmailVerification, appPublicUrl, isProd } = require('../config/env');
+const { sendPasswordResetEmail, sendVerificationEmail } = require('../utils/mailer');
 
 const BCRYPT_ROUNDS = 12;
 const RESET_EXPIRE_MS = 60 * 60 * 1000;
@@ -38,7 +34,7 @@ async function signup(req, res, next) {
 
     const payload = {
       name,
-      email,
+      email: email.trim().toLowerCase(),
       password: passwordHash,
       role: memberRole._id,
       emailVerified: !requireEmailVerification,
@@ -57,9 +53,12 @@ async function signup(req, res, next) {
       .populate('role', 'name roleLevel isActive permissions');
 
     if (requireEmailVerification) {
+      const verifyUrl = `${appPublicUrl}/verify-email?token=${rawVerify}`;
+      await sendVerificationEmail({ toEmail: user.email, verifyUrl });
+
       if (!isProd) {
-        logger.info('Email verification link (development)', {
-          verifyUrl: `${appPublicUrl}/verify-email?token=${rawVerify}`,
+        logger.info('Email verification email queued', {
+          email: user.email,
         });
       }
       return res.status(201).json({
@@ -92,12 +91,14 @@ async function login(req, res, next) {
   try {
     const { email, password } = req.body;
 
-    const deletedUser = await User.findOne({ email, isDeleted: true }).select('_id');
+    const rawEmail = (email || '').trim().toLowerCase();
+
+    const deletedUser = await User.findOne({ email: rawEmail, isDeleted: true }).select('_id');
     if (deletedUser) {
       return res.status(403).json({ success: false, message: 'Account is deleted' });
     }
 
-    const user = await User.findOne({ email, isDeleted: false })
+    const user = await User.findOne({ email: rawEmail, isDeleted: false })
       .select('+password')
       .populate({
         path: 'role',
@@ -247,7 +248,8 @@ async function resetPassword(req, res, next) {
 
 async function verifyEmail(req, res, next) {
   try {
-    const raw = (req.body.token || req.query.token || '').trim();
+    const bodyToken = req.body && typeof req.body === 'object' ? req.body.token : undefined;
+    const raw = (bodyToken || req.query.token || '').trim();
     if (!raw) {
       return next(createHttpError(400, 'Verification token required'));
     }
@@ -257,9 +259,20 @@ async function verifyEmail(req, res, next) {
       emailVerificationTokenHash: th,
       emailVerificationExpires: { $gt: new Date() },
       isDeleted: false,
-    }).select('+emailVerificationTokenHash +emailVerificationExpires');
+    }).select('+emailVerificationTokenHash +emailVerificationExpires emailVerified');
 
     if (!user) {
+      return next(createHttpError(400, 'Invalid or expired verification token'));
+    }
+
+    if (user.emailVerified) {
+      return res.json({
+        success: true,
+        message: 'Email is already verified.',
+      });
+    }
+
+    if (!user.emailVerificationExpires || user.emailVerificationExpires <= new Date()) {
       return next(createHttpError(400, 'Invalid or expired verification token'));
     }
 
@@ -280,6 +293,39 @@ async function verifyEmail(req, res, next) {
   }
 }
 
+async function resendVerification(req, res, next) {
+  try {
+    const user = await User.findOne({ _id: req.auth.sub, isDeleted: false }).select(
+      'email emailVerified'
+    );
+    if (!user) {
+      return next(createHttpError(404, 'User not found'));
+    }
+    if (user.emailVerified) {
+      return next(createHttpError(400, 'Email is already verified'));
+    }
+
+    const raw = generateRawToken(32);
+    user.emailVerificationTokenHash = hashToken(raw);
+    user.emailVerificationExpires = new Date(Date.now() + VERIFY_EXPIRE_MS);
+    await user.save();
+
+    const verifyUrl = `${appPublicUrl}/verify-email?token=${raw}`;
+    await sendVerificationEmail({ toEmail: user.email, verifyUrl });
+
+    if (!isProd) {
+      logger.info('Resent email verification', { email: user.email });
+    }
+
+    return res.json({
+      success: true,
+      message: 'Verification email sent. Check your inbox.',
+    });
+  } catch (err) {
+    return next(err);
+  }
+}
+
 module.exports = {
   signup,
   login,
@@ -287,4 +333,5 @@ module.exports = {
   forgotPassword,
   resetPassword,
   verifyEmail,
+  resendVerification,
 };

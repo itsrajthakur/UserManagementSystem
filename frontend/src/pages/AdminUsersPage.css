@@ -408,9 +408,9 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
+  justify-content: start;
   gap: 1rem;
-  margin-top: 1.25rem;
+  margin: 0.7rem;
 }
 
 .mt-2 {

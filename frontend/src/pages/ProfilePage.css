@@ -72,6 +72,29 @@
   font-size: 0.9rem;
 }
 
+.profile-page__status-row {
+  margin-top: 0.6rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.profile-page__badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  background: rgba(248, 250, 252, 0.06);
+  color: #fde68a;
+}
+
+.profile-page__badge--ok {
+  background: rgba(34, 197, 94, 0.18);
+  color: #bbf7d0;
+}
+
 .profile-page__avatar-wrap {
   flex-shrink: 0;
 }
@@ -162,6 +185,14 @@
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(129, 140, 248, 0.35);
   color: inherit;
+}
+
+.profile-page__btn--ghost {
+  background: transparent;
+  border: 1px solid transparent;
+  padding-inline: 0.2rem;
+  font-size: 0.8rem;
+  font-weight: 500;
 }
 
 .profile-page__hint {
