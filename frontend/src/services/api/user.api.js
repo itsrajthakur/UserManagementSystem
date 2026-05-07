@@ -51,6 +51,10 @@ export const userApi = {
     const { data } = await api.delete(`/users/${userId}`);
     return data;
   },
+  async restoreUser(userId) {
+    const { data } = await api.post(`/users/${userId}/restore`);
+    return data;
+  },
 
   async patchUserStatus(userId, isActive) {
     const { data } = await api.patch(`/users/${userId}/status`, { isActive });

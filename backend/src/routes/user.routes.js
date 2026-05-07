@@ -2,7 +2,7 @@ const { Router } = require('express');
 const { authenticate } = require('../middlewares/auth.middleware');
 const { requireActiveUser } = require('../middlewares/requireActive.middleware');
 const { requireVerifiedEmail } = require('../middlewares/requireVerifiedEmail.middleware');
-const { authorize } = require('../middlewares/rbac.middleware');
+const { authorize, attachRbacMiddleware } = require('../middlewares/rbac.middleware');
 const { RESOURCES, ACTIONS } = require('../constants/rbac');
 const { validateRequest } = require('../middlewares/validate.middleware');
 const { uploadAvatarSingle } = require('../middlewares/uploadAvatar.middleware');
@@ -29,6 +29,7 @@ const {
   adminCreateUser,
   adminPatchUserDetails,
   adminDeleteUser,
+  adminRestoreUser,
   adminUpdateUserRole,
   adminAssignCustomPermissions,
   adminAssignDeniedPermissions,
@@ -44,7 +45,8 @@ router.patch('/me', ...activeAuth, updateMyProfileValidation, validateRequest, u
 router.post('/me/picture', ...activeAuth, uploadAvatarSingle, uploadMyPicture);
 router.post(
   '/me/password',
-  ...activeAuth,
+  authenticate,
+  requireActiveUser,
   changePasswordValidation,
   validateRequest,
   changeMyPassword
@@ -118,7 +120,22 @@ router.delete(
   validateRequest,
   adminDeleteUser
 );
+router.post(
+  '/:userId/restore',
+  ...activeAuth,
+  authorize(RESOURCES.USERS, ACTIONS.UPDATE),
+  deleteUserValidation,
+  validateRequest,
+  adminRestoreUser
+);
 
-router.get('/:userId', ...activeAuth, getUserByIdValidation, validateRequest, getUserById);
+router.get(
+  '/:userId',
+  ...activeAuth,
+  attachRbacMiddleware,
+  getUserByIdValidation,
+  validateRequest,
+  getUserById
+);
 
 module.exports = router;

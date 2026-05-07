@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   verifyEmail as verifyEmailApi,
@@ -19,6 +19,7 @@ export default function VerifyEmailPage() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const { refreshUser } = useAuthUser();
+  const requestedRef = useRef(false);
 
   const token = useMemo(() => (params.get('token') || '').trim(), [params]);
   const [status, setStatus] = useState('pending');
@@ -28,6 +29,9 @@ export default function VerifyEmailPage() {
     let cancelled = false;
 
     async function run() {
+      if (requestedRef.current) return;
+      requestedRef.current = true;
+
       if (!token) {
         setStatus('error');
         setMessage('This link is invalid or incomplete.');
@@ -41,8 +45,11 @@ export default function VerifyEmailPage() {
           setStoredToken(res.data.token);
           await refreshUser();
           setStatus('ok');
-          setMessage(res.message || 'Email verified. Redirecting…');
+          setMessage(res.message || 'Email verified successfully. Redirecting...');
           setTimeout(() => navigate('/', { replace: true }), 1200);
+        } else if (res.success) {
+          setStatus('ok');
+          setMessage(res.message || 'Email is already verified.');
         } else {
           setStatus('error');
           setMessage(res.message || 'Verification failed.');

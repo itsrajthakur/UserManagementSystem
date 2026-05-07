@@ -10,6 +10,7 @@ import VerifyEmailPage from './pages/VerifyEmailPage';
 import UsersRouteGate from './components/routing/UsersRouteGate';
 import RolesRouteGate from './components/routing/RolesRouteGate';
 import ProfilePage from './pages/ProfilePage';
+import ChangePasswordPage from './pages/ChangePasswordPage';
 import './App.css';
 
 export default function App() {
@@ -25,6 +26,7 @@ export default function App() {
           <Route element={<AppLayout />}>
             <Route path="/" element={<HomePage />} />
             <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/change-password" element={<ChangePasswordPage />} />
             <Route path="/users" element={<UsersRouteGate />} />
             <Route path="/roles" element={<RolesRouteGate />} />
             <Route path="*" element={<Navigate to="/" replace />} />

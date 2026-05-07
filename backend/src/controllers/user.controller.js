@@ -1,14 +1,30 @@
 const fs = require('fs');
 const path = require('path');
 const bcrypt = require('bcrypt');
+const crypto = require('crypto');
 const { User, Role, Permission } = require('../models');
 const createHttpError = require('../utils/httpError');
-const { ADMIN_ROLE_NAME } = require('../constants/rbac');
-const { userHasAdminRole, fetchUserProfile } = require('../utils/userAccess');
+const { RESOURCES, ACTIONS, ROLE_LEVEL, EMPLOYEE_ROLE_NAME } = require('../constants/rbac');
+const { matchesPermission } = require('../utils/effectivePermissions');
+const {
+  inferRoleLevel,
+  canActorAssignRole,
+  isSuperAdminLevel,
+  assertActorCanManageTargetUser,
+} = require('../utils/roleHierarchy');
+const { fetchUserProfile } = require('../utils/userAccess');
 const { AVATAR_PUBLIC_PREFIX, AVATAR_DIR } = require('../middlewares/uploadAvatar.middleware');
 const { escapeRegex } = require('../utils/escapeRegex');
+const { appPublicUrl, isProd } = require('../config/env');
+const { hashToken, generateRawToken } = require('../utils/tokenHash');
+const { sendVerificationEmail, sendAdminCreatedUserCredentialsEmail } = require('../utils/mailer');
+const logger = require('../utils/logger');
 
 const BCRYPT_ROUNDS = 12;
+const TEMP_PASSWORD_LENGTH = 14;
+
+const POPULATE_ROLE_USER_LIST = 'name description roleLevel isActive';
+const POPULATE_ROLE_PROFILE = 'name roleLevel isActive';
 
 function toPublicUrl(relativePath) {
   if (!relativePath) return '';
@@ -18,12 +34,30 @@ function toPublicUrl(relativePath) {
   return relativePath;
 }
 
-async function assertSelfOrAdmin(req, targetUserId) {
-  if (String(req.auth.sub) === String(targetUserId)) return;
-  const admin = await userHasAdminRole(req.auth.sub);
-  if (!admin) {
-    throw createHttpError(403, 'Forbidden');
+function generateTemporaryPassword(length = TEMP_PASSWORD_LENGTH) {
+  const lower = 'abcdefghjkmnpqrstuvwxyz';
+  const upper = 'ABCDEFGHJKMNPQRSTUVWXYZ';
+  const digits = '23456789';
+  const symbols = '@#$%*!?';
+  const all = `${lower}${upper}${digits}${symbols}`;
+
+  const chars = [
+    lower[crypto.randomInt(lower.length)],
+    upper[crypto.randomInt(upper.length)],
+    digits[crypto.randomInt(digits.length)],
+    symbols[crypto.randomInt(symbols.length)],
+  ];
+
+  while (chars.length < length) {
+    chars.push(all[crypto.randomInt(all.length)]);
   }
+
+  for (let i = chars.length - 1; i > 0; i -= 1) {
+    const j = crypto.randomInt(i + 1);
+    [chars[i], chars[j]] = [chars[j], chars[i]];
+  }
+
+  return chars.join('');
 }
 
 async function getMyProfile(req, res, next) {
@@ -44,13 +78,39 @@ async function updateMyProfile(req, res, next) {
     if (name === undefined && email === undefined) {
       return next(createHttpError(400, 'Provide name and/or email to update'));
     }
-    const user = await User.findById(req.auth.sub);
+    const user = await User.findOne({ _id: req.auth.sub, isDeleted: false });
     if (!user) {
       return next(createHttpError(404, 'User not found'));
     }
 
     if (name !== undefined) user.name = name.trim();
-    if (email !== undefined) user.email = email;
+
+    if (email !== undefined) {
+      const nextEmail = email.trim().toLowerCase();
+      if (nextEmail !== user.email) {
+        const exists = await User.findOne({ email: nextEmail, isDeleted: false, _id: { $ne: user._id } }).select(
+          '_id'
+        );
+        if (exists) {
+          return next(createHttpError(409, 'Email already registered'));
+        }
+
+        user.email = nextEmail;
+        user.emailVerified = false;
+        const raw = generateRawToken(32);
+        user.emailVerificationTokenHash = hashToken(raw);
+        user.emailVerificationExpires = new Date(Date.now() + 48 * 3600 * 1000);
+
+        const verifyUrl = `${appPublicUrl}/verify-email?token=${raw}`;
+        await sendVerificationEmail({ toEmail: user.email, verifyUrl });
+
+        if (!isProd) {
+          // Best-effort log for debugging
+          // eslint-disable-next-line no-console
+          console.log('Profile email update: verification email queued', { email: user.email });
+        }
+      }
+    }
 
     await user.save();
 
@@ -71,7 +131,7 @@ async function uploadMyPicture(req, res, next) {
       return next(createHttpError(400, 'No file uploaded (use field name "picture")'));
     }
 
-    const user = await User.findById(req.auth.sub);
+    const user = await User.findOne({ _id: req.auth.sub, isDeleted: false });
     if (!user) {
       return next(createHttpError(404, 'User not found'));
     }
@@ -102,34 +162,105 @@ async function uploadMyPicture(req, res, next) {
 
 async function listUsers(req, res, next) {
   try {
+    const actorLevel = req.rbac.actorRoleLevel;
     const activeOnly = req.query.activeOnly !== 'false' && req.query.activeOnly !== '0';
-    const filter = {};
+    const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
 
+    if (actorLevel <= ROLE_LEVEL.EMPLOYEE) {
+      const me = await User.findOne({ _id: req.auth.sub, isDeleted: false })
+        .select('-password')
+        .populate({ path: 'role', select: POPULATE_ROLE_USER_LIST, match: { isDeleted: false } })
+        .populate({ path: 'customPermissions', select: 'resource action', match: { isDeleted: false } })
+        .populate({ path: 'deniedPermissions', select: 'resource action', match: { isDeleted: false } });
+
+      if (!me) {
+        return res.json({
+          success: true,
+          data: {
+            users: [],
+            activeOnly,
+            page: 1,
+            limit,
+            total: 0,
+            totalPages: 1,
+          },
+        });
+      }
+
+      if (activeOnly && me.isActive === false) {
+        return res.json({
+          success: true,
+          data: {
+            users: [],
+            activeOnly,
+            page: 1,
+            limit,
+            total: 0,
+            totalPages: 1,
+          },
+        });
+      }
+
+      if (search) {
+        const safe = escapeRegex(search);
+        const rx = new RegExp(safe, 'i');
+        if (!rx.test(me.name) && !rx.test(me.email)) {
+          return res.json({
+            success: true,
+            data: {
+              users: [],
+              activeOnly,
+              page: 1,
+              limit,
+              total: 0,
+              totalPages: 1,
+            },
+          });
+        }
+      }
+
+      return res.json({
+        success: true,
+        data: {
+          users: [me],
+          activeOnly,
+          page: 1,
+          limit,
+          total: 1,
+          totalPages: 1,
+        },
+      });
+    }
+
+    const filter = {};
     if (activeOnly) {
       filter.isActive = true;
     }
-
-    const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
     if (search) {
       const safe = escapeRegex(search);
       const rx = new RegExp(safe, 'i');
       filter.$or = [{ name: rx }, { email: rx }];
     }
 
-    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+    const manageableRoleIds = await Role.find({ roleLevel: { $lt: actorLevel }, isDeleted: false }).distinct(
+      '_id'
+    );
+    filter.role = { $in: manageableRoleIds };
+
     const skip = (page - 1) * limit;
 
     const [total, users] = await Promise.all([
-      User.countDocuments(filter),
-      User.find(filter)
+      User.countDocuments({ ...filter, isDeleted: false }),
+      User.find({ ...filter, isDeleted: false })
         .select('-password')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
-        .populate('role', 'name description')
-        .populate('customPermissions', 'resource action')
-        .populate('deniedPermissions', 'resource action'),
+        .populate({ path: 'role', select: POPULATE_ROLE_USER_LIST, match: { isDeleted: false } })
+        .populate({ path: 'customPermissions', select: 'resource action', match: { isDeleted: false } })
+        .populate({ path: 'deniedPermissions', select: 'resource action', match: { isDeleted: false } }),
     ]);
 
     const totalPages = Math.max(1, Math.ceil(total / limit));
@@ -153,13 +284,30 @@ async function listUsers(req, res, next) {
 async function getUserById(req, res, next) {
   try {
     const { userId } = req.params;
-    await assertSelfOrAdmin(req, userId);
 
-    const user = await fetchUserProfile(userId);
-    if (!user) {
+    if (String(userId) === String(req.auth.sub)) {
+      const user = await fetchUserProfile(userId);
+      if (!user) {
+        return next(createHttpError(404, 'User not found'));
+      }
+      return res.json({ success: true, data: { user } });
+    }
+
+    if (!matchesPermission(req.rbac.effectivePermissions, RESOURCES.USERS, ACTIONS.READ)) {
+      return next(createHttpError(403, 'Forbidden'));
+    }
+
+    const target = await User.findOne({ _id: userId, isDeleted: false }).populate('role', POPULATE_ROLE_PROFILE);
+    if (!target) {
       return next(createHttpError(404, 'User not found'));
     }
 
+    const targetLevel = inferRoleLevel(target.role);
+    if (targetLevel >= req.rbac.actorRoleLevel) {
+      return next(createHttpError(403, 'Cannot access users at or above your privilege level'));
+    }
+
+    const user = await fetchUserProfile(userId);
     return res.json({ success: true, data: { user } });
   } catch (err) {
     return next(err);
@@ -171,14 +319,34 @@ async function adminUpdateUserRole(req, res, next) {
     const { userId } = req.params;
     const { roleId } = req.body;
 
-    const target = await User.findById(userId);
+    if (String(userId) === String(req.auth.sub)) {
+      return next(createHttpError(403, 'You cannot change your own role'));
+    }
+
+    const target = await User.findOne({ _id: userId, isDeleted: false }).populate('role', POPULATE_ROLE_PROFILE);
     if (!target) {
       return next(createHttpError(404, 'User not found'));
     }
 
-    const role = await Role.findById(roleId);
+    try {
+      assertActorCanManageTargetUser(req, target);
+    } catch (e) {
+      return next(e);
+    }
+
+    const role = await Role.findOne({ _id: roleId, isDeleted: false });
     if (!role) {
       return next(createHttpError(400, 'Invalid role'));
+    }
+    if (role.isActive === false) {
+      return next(createHttpError(400, 'Cannot assign an inactive role'));
+    }
+
+    const newLevel = inferRoleLevel(role);
+    if (
+      !canActorAssignRole(req.rbac.actorRoleLevel, newLevel, req.rbac.isSuperAdminActor)
+    ) {
+      return next(createHttpError(403, 'Cannot assign this role'));
     }
 
     target.role = role._id;
@@ -198,11 +366,22 @@ async function adminUpdateUserRole(req, res, next) {
 async function adminAssignCustomPermissions(req, res, next) {
   try {
     const { userId } = req.params;
+
+    if (String(userId) === String(req.auth.sub)) {
+      return next(createHttpError(403, 'You cannot modify your own permission overrides'));
+    }
+
     const uniqueIds = [...new Set(req.body.permissionIds.map((id) => String(id)))];
 
-    const target = await User.findById(userId);
+    const target = await User.findOne({ _id: userId, isDeleted: false }).populate('role', POPULATE_ROLE_PROFILE);
     if (!target) {
       return next(createHttpError(404, 'User not found'));
+    }
+
+    try {
+      assertActorCanManageTargetUser(req, target);
+    } catch (e) {
+      return next(e);
     }
 
     const count = await Permission.countDocuments({ _id: { $in: uniqueIds } });
@@ -229,13 +408,21 @@ async function adminSetUserStatus(req, res, next) {
     const { userId } = req.params;
     const { isActive } = req.body;
 
-    if (userId === req.auth.sub && isActive === false) {
+    if (String(userId) === String(req.auth.sub) && isActive === false) {
       return next(createHttpError(400, 'You cannot deactivate your own account'));
     }
 
-    const target = await User.findById(userId);
+    const target = await User.findOne({ _id: userId, isDeleted: false }).populate('role', POPULATE_ROLE_PROFILE);
     if (!target) {
       return next(createHttpError(404, 'User not found'));
+    }
+
+    if (String(userId) !== String(req.auth.sub)) {
+      try {
+        assertActorCanManageTargetUser(req, target);
+      } catch (e) {
+        return next(e);
+      }
     }
 
     target.isActive = isActive;
@@ -255,7 +442,7 @@ async function adminSetUserStatus(req, res, next) {
 async function changeMyPassword(req, res, next) {
   try {
     const { currentPassword, newPassword } = req.body;
-    const user = await User.findById(req.auth.sub).select('+password');
+    const user = await User.findOne({ _id: req.auth.sub, isDeleted: false }).select('+password');
     if (!user) {
       return next(createHttpError(404, 'User not found'));
     }
@@ -266,6 +453,7 @@ async function changeMyPassword(req, res, next) {
     }
 
     user.password = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+    user.mustChangePassword = false;
     await user.save();
 
     return res.json({ success: true, message: 'Password updated' });
@@ -276,34 +464,68 @@ async function changeMyPassword(req, res, next) {
 
 async function adminCreateUser(req, res, next) {
   try {
-    const { name, email, password, roleId, isActive } = req.body;
+    const { name, email, roleId, isActive } = req.body;
 
     let roleDoc;
     if (roleId) {
-      roleDoc = await Role.findById(roleId);
+      roleDoc = await Role.findOne({ _id: roleId, isDeleted: false });
       if (!roleDoc) return next(createHttpError(400, 'Invalid role'));
     } else {
-      roleDoc = await Role.findOne({ name: 'Member' });
-      if (!roleDoc) roleDoc = await Role.create({ name: 'Member', permissions: [], description: '' });
+      roleDoc = await Role.findOne({ name: EMPLOYEE_ROLE_NAME, isDeleted: false });
+      if (!roleDoc) {
+        return next(
+          createHttpError(500, 'Employee role is not configured; run database seed')
+        );
+      }
     }
 
-    const exists = await User.findOne({ email: email.trim().toLowerCase() });
+    const newLevel = inferRoleLevel(roleDoc);
+    if (roleDoc.isActive === false) {
+      return next(createHttpError(400, 'Cannot assign an inactive role'));
+    }
+    if (
+      !canActorAssignRole(req.rbac.actorRoleLevel, newLevel, req.rbac.isSuperAdminActor)
+    ) {
+      return next(createHttpError(403, 'Cannot assign this role'));
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const exists = await User.findOne({ email: normalizedEmail, isDeleted: false });
     if (exists) return next(createHttpError(409, 'Email already registered'));
 
-    const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+    const tempPassword = generateTemporaryPassword();
+    const passwordHash = await bcrypt.hash(tempPassword, BCRYPT_ROUNDS);
     const user = await User.create({
       name: name.trim(),
-      email: email.trim().toLowerCase(),
+      email: normalizedEmail,
       password: passwordHash,
+      mustChangePassword: true,
       role: roleDoc._id,
       isActive: isActive !== false,
-      emailVerified: true,
+      emailVerified: false,
+    });
+
+    const loginUrl = `${appPublicUrl}/login`;
+    setImmediate(async () => {
+      try {
+        await sendAdminCreatedUserCredentialsEmail({
+          toEmail: normalizedEmail,
+          tempPassword,
+          loginUrl,
+        });
+      } catch (mailErr) {
+        logger.error('Failed to send admin-created user credentials email', {
+          userId: String(user._id),
+          email: normalizedEmail,
+          error: mailErr.message,
+        });
+      }
     });
 
     const populated = await fetchUserProfile(user._id);
     return res.status(201).json({
       success: true,
-      message: 'User created',
+      message: 'User created successfully. Login credentials sent to registered email.',
       data: { user: populated },
     });
   } catch (err) {
@@ -320,11 +542,43 @@ async function adminPatchUserDetails(req, res, next) {
       return next(createHttpError(400, 'Provide name and/or email'));
     }
 
-    const target = await User.findById(userId);
+    const target = await User.findOne({ _id: userId, isDeleted: false }).populate('role', POPULATE_ROLE_PROFILE);
     if (!target) return next(createHttpError(404, 'User not found'));
 
+    if (String(userId) !== String(req.auth.sub)) {
+      try {
+        assertActorCanManageTargetUser(req, target);
+      } catch (e) {
+        return next(e);
+      }
+    }
+
     if (name !== undefined) target.name = name.trim();
-    if (email !== undefined) target.email = email.trim().toLowerCase();
+    if (email !== undefined) {
+      const nextEmail = email.trim().toLowerCase();
+      if (nextEmail !== target.email) {
+        const exists = await User.findOne({ email: nextEmail, isDeleted: false, _id: { $ne: target._id } }).select(
+          '_id'
+        );
+        if (exists) {
+          return next(createHttpError(409, 'Email already registered'));
+        }
+
+        target.email = nextEmail;
+        target.emailVerified = false;
+        const raw = generateRawToken(32);
+        target.emailVerificationTokenHash = hashToken(raw);
+        target.emailVerificationExpires = new Date(Date.now() + 48 * 3600 * 1000);
+
+        const verifyUrl = `${appPublicUrl}/verify-email?token=${raw}`;
+        await sendVerificationEmail({ toEmail: target.email, verifyUrl });
+
+        if (!isProd) {
+          // eslint-disable-next-line no-console
+          console.log('Admin email update: verification email queued', { email: target.email });
+        }
+      }
+    }
 
     await target.save();
     const populated = await fetchUserProfile(target._id);
@@ -341,9 +595,20 @@ async function adminPatchUserDetails(req, res, next) {
 async function adminAssignDeniedPermissions(req, res, next) {
   try {
     const { userId } = req.params;
+
+    if (String(userId) === String(req.auth.sub)) {
+      return next(createHttpError(403, 'You cannot modify your own permission overrides'));
+    }
+
     const uniqueIds = [...new Set(req.body.permissionIds.map((id) => String(id)))];
-    const target = await User.findById(userId);
+    const target = await User.findOne({ _id: userId, isDeleted: false }).populate('role', POPULATE_ROLE_PROFILE);
     if (!target) return next(createHttpError(404, 'User not found'));
+
+    try {
+      assertActorCanManageTargetUser(req, target);
+    } catch (e) {
+      return next(e);
+    }
 
     const count = await Permission.countDocuments({ _id: { $in: uniqueIds } });
     if (count !== uniqueIds.length) {
@@ -371,19 +636,66 @@ async function adminDeleteUser(req, res, next) {
       return next(createHttpError(400, 'You cannot delete your own account'));
     }
 
-    const target = await User.findById(userId).populate('role', 'name');
+    const target = await User.findOne({ _id: userId, isDeleted: false }).populate('role', POPULATE_ROLE_PROFILE);
     if (!target) return next(createHttpError(404, 'User not found'));
 
-    if (target.role?.name === ADMIN_ROLE_NAME) {
-      const adminRole = await Role.findOne({ name: ADMIN_ROLE_NAME });
-      const adminCount = adminRole ? await User.countDocuments({ role: adminRole._id }) : 0;
-      if (adminCount <= 1) {
-        return next(createHttpError(400, 'Cannot delete the last Administrator account'));
+    try {
+      assertActorCanManageTargetUser(req, target);
+    } catch (e) {
+      return next(e);
+    }
+
+    if (isSuperAdminLevel(inferRoleLevel(target.role))) {
+      const superAdminRoleId = target.role._id;
+      const superCount = await User.countDocuments({ role: superAdminRoleId, isDeleted: false });
+      if (superCount <= 1) {
+        return next(createHttpError(400, 'Cannot delete the last SuperAdmin account'));
       }
     }
 
-    await User.deleteOne({ _id: target._id });
+    target.isDeleted = true;
+    target.deletedAt = new Date();
+    target.deletedBy = req.auth?.sub || null;
+    await target.save();
     return res.json({ success: true, message: 'User deleted' });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function adminRestoreUser(req, res, next) {
+  try {
+    const { userId } = req.params;
+    const target = await User.findOne({ _id: userId, isDeleted: true }).populate(
+      'role',
+      POPULATE_ROLE_PROFILE
+    );
+    if (!target) return next(createHttpError(404, 'Deleted user not found'));
+
+    if (target.role?.isDeleted) {
+      return next(createHttpError(409, 'Cannot restore user because assigned role is deleted'));
+    }
+    if (target.role?.isActive === false) {
+      return next(createHttpError(409, 'Cannot restore user because assigned role is inactive'));
+    }
+
+    try {
+      assertActorCanManageTargetUser(req, target);
+    } catch (e) {
+      return next(e);
+    }
+
+    target.isDeleted = false;
+    target.deletedAt = null;
+    target.deletedBy = null;
+    await target.save();
+
+    const populated = await fetchUserProfile(target._id);
+    return res.json({
+      success: true,
+      message: 'User restored',
+      data: { user: populated },
+    });
   } catch (err) {
     return next(err);
   }
@@ -403,4 +715,5 @@ module.exports = {
   adminAssignCustomPermissions,
   adminAssignDeniedPermissions,
   adminSetUserStatus,
+  adminRestoreUser,
 };

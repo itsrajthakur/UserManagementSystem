@@ -1,5 +1,5 @@
 .admin-users-page {
-  /* max-width: 1200px; */
+  padding-bottom: 1.25rem;
 }
 
 .admin-users-page__title {
@@ -22,6 +22,32 @@
   color: #fecaca;
   font-size: 0.9rem;
   margin-bottom: 1rem;
+}
+
+.admin-users-page__stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.admin-users-page__stat-card {
+  border: 1px solid var(--app-border, #272a34);
+  border-radius: 10px;
+  padding: 0.7rem 0.85rem;
+  background: rgba(99, 102, 241, 0.06);
+}
+
+.admin-users-page__stat-card p {
+  margin: 0;
+  font-size: 0.78rem;
+  opacity: 0.75;
+}
+
+.admin-users-page__stat-card strong {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 1.25rem;
 }
 
 .admin-users-page__toolbar {
@@ -153,9 +179,9 @@
   gap: 1.25rem;
 }
 
-@media (min-width: 900px) {
+@media (min-width: 1100px) {
   .admin-users-page__layout {
-    grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+    grid-template-columns: minmax(0, 1.35fr) minmax(280px, 1fr);
     align-items: start;
   }
 }
@@ -164,6 +190,23 @@
   overflow-x: auto;
   border: 1px solid var(--app-border, #272a34);
   border-radius: 10px;
+  background: rgba(15, 23, 42, 0.2);
+}
+
+.admin-users-page__table-head {
+  padding: 0.8rem 0.85rem 0.55rem;
+  border-bottom: 1px solid var(--app-border, #272a34);
+}
+
+.admin-users-page__table-head h2 {
+  margin: 0;
+  font-size: 0.97rem;
+}
+
+.admin-users-page__table-head p {
+  margin: 0.3rem 0 0;
+  font-size: 0.78rem;
+  opacity: 0.72;
 }
 
 .admin-users-page__table {
@@ -184,12 +227,29 @@
   opacity: 0.85;
 }
 
+.admin-users-page__status {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.16rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: rgba(34, 197, 94, 0.18);
+  color: #86efac;
+}
+
+.admin-users-page__status--inactive {
+  background: rgba(239, 68, 68, 0.18);
+  color: #fecaca;
+}
+
 .admin-users-page__editor {
   border: 1px solid var(--app-border, #272a34);
   border-radius: 10px;
-  padding: 1rem;
+  padding: 1rem 1rem 0.85rem;
   max-height: min(85vh, 900px);
   overflow: auto;
+  background: rgba(15, 23, 42, 0.24);
 }
 
 .admin-users-page__editor-head {
@@ -208,8 +268,9 @@
 .admin-users-page__fieldset {
   border: 1px solid var(--app-border, #272a34);
   border-radius: 8px;
-  padding: 0.75rem 1rem;
+  padding: 0.8rem 1rem;
   margin: 0 0 1rem;
+  background: rgba(15, 23, 42, 0.2);
 }
 
 .admin-users-page__fieldset--danger {
@@ -264,6 +325,72 @@
   white-space: nowrap;
 }
 
+.admin-users-page__override-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.9rem;
+  margin: 0.2rem 0 0.65rem;
+  font-size: 0.78rem;
+  opacity: 0.86;
+}
+
+.admin-users-page__matrix-wrap {
+  overflow: auto;
+  border: 1px solid var(--app-border, #272a34);
+  border-radius: 8px;
+  margin: 0.35rem 0 0.75rem;
+}
+
+.admin-users-page__matrix {
+  width: 100%;
+  /* min-width: 640px; */
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.admin-users-page__matrix th,
+.admin-users-page__matrix td {
+  border-bottom: 1px solid var(--app-border, #272a34);
+  padding: 0.45rem 0.5rem;
+  text-align: center;
+}
+
+.admin-users-page__matrix thead th {
+  font-weight: 600;
+  opacity: 0.86;
+}
+
+.admin-users-page__matrix th:first-child,
+.admin-users-page__matrix tbody th {
+  text-align: left;
+  min-width: 140px;
+}
+
+.admin-users-page__matrix tbody tr:last-child th,
+.admin-users-page__matrix tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.admin-users-page__mode-select {
+  width: 100%;
+  min-width: 90px;
+  border: 1px solid var(--app-border, #272a34);
+  border-radius: 6px;
+  padding: 0.26rem 0.4rem;
+  background: rgba(255, 255, 255, 0.04);
+  color: inherit;
+  font: inherit;
+  font-size: 0.76rem;
+}
+
+.admin-users-page__matrix-empty {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  background: rgba(148, 163, 184, 0.28);
+}
+
 .admin-users-page__hint {
   margin-left: 0.35rem;
   font-size: 0.75rem;
@@ -281,7 +408,11 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
+  justify-content: start;
   gap: 1rem;
-  margin-top: 1.25rem;
+  margin: 0.7rem;
+}
+
+.mt-2 {
+  margin-top: 0.65rem;
 }

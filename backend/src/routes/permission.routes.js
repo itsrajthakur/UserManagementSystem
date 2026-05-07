@@ -16,6 +16,7 @@ const {
   getPermissionById,
   updatePermission,
   deletePermission,
+  restorePermission,
 } = require('../controllers/permission.controller');
 
 const router = Router();
@@ -54,6 +55,14 @@ router.delete(
   permissionIdOnlyValidation,
   validateRequest,
   deletePermission
+);
+router.post(
+  '/:permissionId/restore',
+  ...activeAuth,
+  authorize(RESOURCES.PERMISSIONS, ACTIONS.UPDATE),
+  permissionIdOnlyValidation,
+  validateRequest,
+  restorePermission
 );
 
 module.exports = router;

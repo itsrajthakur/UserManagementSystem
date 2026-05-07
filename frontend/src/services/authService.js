@@ -24,3 +24,7 @@ export async function resetPassword(payload) {
 export async function verifyEmail(token) {
   return authApi.verifyEmail(token);
 }
+
+export async function resendVerificationEmail() {
+  return authApi.resendVerification();
+}

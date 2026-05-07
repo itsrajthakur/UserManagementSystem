@@ -82,7 +82,7 @@ export default function SignupPage() {
       <div className="auth-card">
         <h1>Create account</h1>
         <p className="auth-card__subtitle">
-          New accounts use the Member role. You may need to verify your email depending on server
+          New accounts use the Employee role. You may need to verify your email depending on server
           settings.
         </p>
 

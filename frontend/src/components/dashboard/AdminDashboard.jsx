@@ -10,9 +10,9 @@ export default function AdminDashboard() {
   return (
     <section className="dash-stack">
       <div>
-        <h1 style={{ margin: '0 0 0.35rem', fontSize: '1.35rem' }}>Administrator dashboard</h1>
+        <h1 style={{ margin: '0 0 0.35rem', fontSize: '1.35rem' }}>Team dashboard</h1>
         <p className="dash-intro">
-          Manage users and roles / permissions across the workspace.
+          User and access management depends on your role level (SuperAdmin / Admin / Manager).
         </p>
       </div>
 
@@ -33,7 +33,7 @@ export default function AdminDashboard() {
         </div>
         <div className="dash-card">
           <h3>Effective access (you)</h3>
-          <p>This account uses the Admin role shortcut (full bypass in route guards).</p>
+          <p>Summary of merged role permissions and optional per-user overrides.</p>
           <div className="dash-badges" aria-hidden="true">
             {permissions.slice(0, 8).map((p) => (
               <span key={`${p.resource}:${p.action}`} className="dash-badge">

@@ -19,6 +19,10 @@ const userSchema = new mongoose.Schema(
       required: true,
       select: false,
     },
+    mustChangePassword: {
+      type: Boolean,
+      default: false,
+    },
     profilePic: {
       type: String,
       trim: true,
@@ -49,7 +53,7 @@ const userSchema = new mongoose.Schema(
     ],
     emailVerified: {
       type: Boolean,
-      default: true,
+      default: false,
     },
     emailVerificationTokenHash: { type: String, select: false },
     emailVerificationExpires: { type: Date, select: false },
@@ -58,6 +62,20 @@ const userSchema = new mongoose.Schema(
     isActive: {
       type: Boolean,
       default: true,
+    },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    deletedAt: {
+      type: Date,
+      default: null,
+    },
+    deletedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
     },
   },
   { timestamps: true }

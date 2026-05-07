@@ -18,6 +18,7 @@ export default function ForgotPasswordPage() {
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [resetUrl, setResetUrl] = useState('');
 
   if (getStoredToken()) {
     return <Navigate to="/" replace />;
@@ -27,10 +28,16 @@ export default function ForgotPasswordPage() {
     e.preventDefault();
     setError('');
     setMessage('');
+    setResetUrl('');
     setPending(true);
     try {
       const res = await forgotApi({ email: email.trim() });
-      if (res.success) setMessage(res.message || 'Check your inbox.');
+      if (res.success) {
+        setMessage(res.message || 'Check your inbox.');
+        if (typeof res.data?.resetUrl === 'string') {
+          setResetUrl(res.data.resetUrl);
+        }
+      }
       else setError('Request failed');
     } catch (err) {
       setError(formatApiError(err));
@@ -50,6 +57,14 @@ export default function ForgotPasswordPage() {
 
         {message ? <div className="auth-banner auth-banner--success">{message}</div> : null}
         {error ? <div className="auth-banner">{error}</div> : null}
+        {resetUrl ? (
+          <div className="auth-banner auth-banner--success">
+            Development reset link:{' '}
+            <a href={resetUrl} target="_blank" rel="noreferrer">
+              Open reset page
+            </a>
+          </div>
+        ) : null}
 
         <form onSubmit={handleSubmit} noValidate>
           <div className="auth-field">

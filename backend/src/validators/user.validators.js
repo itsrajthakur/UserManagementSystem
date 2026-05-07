@@ -68,11 +68,6 @@ const adminCreateUserValidation = [
     .notEmpty()
     .isLength({ max: 120 }),
   body('email').trim().notEmpty().normalizeEmail().isEmail(),
-  body('password')
-    .notEmpty()
-    .isLength({ min: 8 })
-    .matches(/\d/)
-    .matches(/[a-zA-Z]/),
   body('roleId').optional().isMongoId(),
   body('isActive').optional().isBoolean(),
 ];

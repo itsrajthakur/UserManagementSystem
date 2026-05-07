@@ -32,4 +32,9 @@ export const authApi = {
     });
     return data;
   },
+
+  async resendVerification() {
+    const { data } = await api.post('/auth/resend-verification');
+    return data;
+  },
 };
