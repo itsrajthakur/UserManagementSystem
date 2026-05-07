@@ -12,6 +12,16 @@ const BCRYPT_ROUNDS = 12;
 const RESET_EXPIRE_MS = 60 * 60 * 1000;
 const VERIFY_EXPIRE_MS = 48 * 3600 * 1000;
 
+function sendInBackground(taskName, fn) {
+  setImmediate(async () => {
+    try {
+      await fn();
+    } catch (err) {
+      logger.error(`${taskName} failed`, { error: err.message });
+    }
+  });
+}
+
 async function ensureEmployeeRole() {
   let role = await Role.findOne({ name: EMPLOYEE_ROLE_NAME, isDeleted: false });
   if (!role) {
@@ -54,7 +64,9 @@ async function signup(req, res, next) {
 
     if (requireEmailVerification) {
       const verifyUrl = `${appPublicUrl}/verify-email?token=${rawVerify}`;
-      await sendVerificationEmail({ toEmail: user.email, verifyUrl });
+      sendInBackground('signup verification email', () =>
+        sendVerificationEmail({ toEmail: user.email, verifyUrl })
+      );
 
       if (!isProd) {
         logger.info('Email verification email queued', {
@@ -206,7 +218,9 @@ async function forgotPassword(req, res, next) {
     user.passwordResetExpires = new Date(Date.now() + RESET_EXPIRE_MS);
     await user.save();
 
-    await sendPasswordResetEmail({ toEmail: user.email, resetUrl });
+    sendInBackground('forgot-password email', () =>
+      sendPasswordResetEmail({ toEmail: user.email, resetUrl })
+    );
 
     if (!isProd) {
       logger.info('Password reset email queued', {
@@ -312,7 +326,9 @@ async function resendVerification(req, res, next) {
     await user.save();
 
     const verifyUrl = `${appPublicUrl}/verify-email?token=${raw}`;
-    await sendVerificationEmail({ toEmail: user.email, verifyUrl });
+    sendInBackground('resend verification email', () =>
+      sendVerificationEmail({ toEmail: user.email, verifyUrl })
+    );
 
     if (!isProd) {
       logger.info('Resent email verification', { email: user.email });
